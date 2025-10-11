@@ -1,4 +1,6 @@
 from django.db import models
+import time
+from django.contrib.auth.hashers import make_password
 
 # Create your models here.
 
@@ -17,3 +19,24 @@ class User(models.Model):
 
     def get_userName(self):
         return self.userName
+    
+    def get_email(self):
+        return self.email
+
+    def set_password(self, password):
+        self.passWord = make_password(password)
+
+    
+class OTP(models.Model):
+    otp     = models.IntegerField()
+    account = models.CharField(max_length=128)
+    time    = models.IntegerField(default=time.time())
+
+    def get_details(self):
+        return self.otp, self.time
+
+    def set_details(self, otp, time):
+        self.otp, self.time = otp, time
+    
+    def __str__(self):
+        return f"OTP {self.otp} for account {self.account} generated!"
