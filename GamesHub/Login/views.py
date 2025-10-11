@@ -14,6 +14,10 @@ from django.contrib.auth.hashers import check_password
 @api_view(["POST"])
 def SignUp(request):
     userObject     = userSerializer(data = request.data)
+
+    if User.objects.filter(userName = request.data.get("userName")).exists():
+        return Response({"message": "UserName already Exists"}, status=status.HTTP_400_BAD_REQUEST)
+
     if userObject.is_valid():
         userObject = userObject.save()
         refresh = RefreshToken.for_user(userObject)
@@ -23,6 +27,7 @@ def SignUp(request):
 
 @api_view(["GET"])
 def Login(request):
+    print(User.objects.all())
     try:
         userObj = User.objects.get(userName = request.data.get("userName"))
         if check_password(request.data.get("passWord"), userObj.get_passWord()):
@@ -30,7 +35,8 @@ def Login(request):
             return Response({"message": f"User {userObj.get_userName()} logged in and you token is {str(refresh.access_token)}"}, status=status.HTTP_200_OK)
         else:
             return Response({"message":f"Incorrect password for user {userObj.get_userName()}"}, status=status.HTTP_400_BAD_REQUEST)
-    except:
+    except Exception as e:
+        print(e)
         return Response({"message":"userName not found"}, status=status.HTTP_404_NOT_FOUND)
     
 
