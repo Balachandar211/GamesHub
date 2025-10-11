@@ -11,3 +11,9 @@ class User(models.Model):
     email          = models.EmailField()
     phoneNumber    = models.CharField()
     userType       = models.IntegerField(default=0)
+
+    def get_passWord(self):
+        return self.passWord
+
+    def get_userName(self):
+        return self.userName
