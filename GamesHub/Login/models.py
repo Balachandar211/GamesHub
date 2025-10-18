@@ -1,30 +1,26 @@
 from django.db import models
 import time
-from django.contrib.auth.hashers import make_password
+from django.contrib.auth.models import AbstractUser
+import base64
 
-# Create your models here.
 
-class User(models.Model):
-    userName       = models.CharField(max_length = 128)
-    firstName      = models.CharField(max_length = 128, default="FirstName")
-    lastName       = models.CharField(max_length = 128, default="LastName")
-    passWord       = models.CharField(max_length = 256)
+class AppUser(AbstractUser):
     profilePicture = models.FileField(upload_to='Media/ProfilePicture/', blank=True, null=True)
     email          = models.EmailField()
     phoneNumber    = models.CharField()
-    userType       = models.IntegerField(default=0)
+    is_active      = models.BooleanField(default=True)  
 
-    def get_passWord(self):
-        return self.passWord
-
-    def get_userName(self):
-        return self.userName
-    
     def get_email(self):
         return self.email
+    
+    def get_profilePicture(self):
+        if not (self.profilePicture and hasattr(self.profilePicture, 'url')):
+            return None
 
-    def set_password(self, password):
-        self.passWord = make_password(password)
+        with self.profilePicture.open('rb') as f:
+            encoded = base64.b64encode(f.read()).decode('utf-8')
+        
+        return encoded
 
     
 class OTP(models.Model):
