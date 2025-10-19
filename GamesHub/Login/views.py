@@ -6,7 +6,6 @@ from .serializers import userSerializer
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth.hashers import check_password
 from django.core.mail import send_mail
 import random
 import time
@@ -34,7 +33,7 @@ def SignUp(request):
             recipient_list=[request.data.get('email')],
             fail_silently=False,
             )
-        return Response({"message": f"User {request.data.get('username')} added successfully and your token is {str(refresh.access_token)}"}, status=status.HTTP_201_CREATED)
+        return Response({"message": f"User {request.data.get('username')} added successfully", "Access_Token":str(refresh.access_token), "Refresh_Token":str(refresh)}, status=status.HTTP_201_CREATED)
     
     return Response({"errors":userObject.errors}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -44,7 +43,7 @@ def Login(request):
         userObj = User.objects.get(username = request.data.get("username"))
         if userObj.check_password(request.data.get("password")):
             refresh = RefreshToken.for_user(userObj)
-            return Response({"message": f"User {userObj.get_username()} logged in and your token is {str(refresh.access_token)}"}, status=status.HTTP_200_OK)
+            return Response({"message": f"User {userObj.get_username()} logged in", "Access_Token":str(refresh.access_token), "Refresh_Token":str(refresh)}, status=status.HTTP_200_OK)
         else:
             return Response({"message":f"Incorrect password for user {userObj.get_username()}"}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
@@ -98,6 +97,32 @@ def Forgot_Password(request):
             return Response({"message":f"otp sent to {email_id}"})
         except Exception as e:
             print(e)
-            return Response({"message":f"Incorrect Username {request.data.get("username")}"})
+            return Response({"message":f"Incorrect Username {request.data.get("username")}"}, status=status.HTTP_400_BAD_REQUEST)
 
 
+@api_view(["POST"])
+def extendSession(request):
+    refresh   = request.data.get("Refresh_Token")
+    if not refresh:
+        return Response({"message":"Refresh token not provided"}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        refresh_token = RefreshToken(refresh)
+        return Response({"message":"Access Token generated successfully", "Access_Token":str(refresh_token.access_token)}, status=status.HTTP_200_OK)
+    except:
+        return Response({"message":"Refresh token incorrect or expired"}, status=status.HTTP_401_UNAUTHORIZED)
+    
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def logout(request):
+    refresh   = request.data.get("Refresh_Token")
+    if not refresh:
+        return Response({"message":"Refresh token not provided"}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        user_name     = request.user.get_username()
+        refresh_token = RefreshToken(refresh)
+        refresh_token.blacklist()
+        return Response({"message":f"user {user_name} logged out successfully!"}, status=status.HTTP_205_RESET_CONTENT)
+    except Exception as e:
+        print(e)
+        return Response({"message":"Refresh token incorrect or expired"}, status=status.HTTP_401_UNAUTHORIZED)
+    

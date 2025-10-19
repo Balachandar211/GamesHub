@@ -21,6 +21,9 @@ class AppUser(AbstractUser):
             encoded = base64.b64encode(f.read()).decode('utf-8')
         
         return encoded
+    
+    def __str__(self):
+        return self.username
 
     
 class OTP(models.Model):
