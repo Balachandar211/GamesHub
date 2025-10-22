@@ -64,7 +64,7 @@ def Forgot_Password(request):
                 userObj.set_password(request.data.get("password"))
                 userObj.save()
                 otpObj.delete()
-                return Response({"message": f"Password change successfull for account {request.data.get("username")}"}, status=status.HTTP_200_OK)
+                return Response({"message": f"Password change successfull for account {request.data.get("username")}"}, status=status.HTTP_202_ACCEPTED)
             else:
                 return Response({"message": "OTP either expired or incorrect"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -94,7 +94,7 @@ def Forgot_Password(request):
             recipient_list=[email_id],
             fail_silently=False,
             )
-            return Response({"message":f"otp sent to {email_id}"})
+            return Response({"message":f"otp sent to {email_id} for password reset for user account {request.data.get("username")}"}, status=status.HTTP_201_CREATED)
         except Exception as e:
             print(e)
             return Response({"message":f"Incorrect Username {request.data.get("username")}"}, status=status.HTTP_400_BAD_REQUEST)
@@ -115,7 +115,7 @@ def extendSession(request):
 @permission_classes([IsAuthenticated])
 def logout(request):
     refresh   = request.data.get("Refresh_Token")
-    if not refresh:
+    if refresh is not None:
         return Response({"message":"Refresh token not provided"}, status=status.HTTP_400_BAD_REQUEST)
     try:
         user_name     = request.user.get_username()
@@ -125,4 +125,57 @@ def logout(request):
     except Exception as e:
         print(e)
         return Response({"message":"Refresh token incorrect or expired"}, status=status.HTTP_401_UNAUTHORIZED)
-    
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def delete_user(request):
+    userObj  = request.user
+    email_id = userObj.get_email()
+    username = request.user.get_username()
+
+    if request.data.get("OTP") is not None:
+        otp_num  = random.randint(1000, 9999)
+
+        if OTP.objects.filter(account = username).exists():
+            otpObj   = OTP.objects.get(account = username)
+            otpObj.set_details(otp_num, time.time())
+        else:    
+            otpObj   = OTP(otp=otp_num, account = username)
+        otpObj.save()
+
+        send_mail(
+        subject='GamesHub Account Deletion',
+        message='',
+        html_message= f'Your otp to delete account is <b>{otp_num}</b>',
+        from_email='gameshub.test@gmail.com',
+        recipient_list=[email_id],
+        fail_silently=False,
+        )
+
+        return Response({"message": f"OTP created successfully for account deletion for user {username}"}, status=status.HTTP_201_CREATED)
+
+    else:
+        otp      = request.data.get("OTP")
+        try:
+            otpObj   = OTP.objects.get(account = username)
+            gen_otp, time_gen = otpObj.get_details()
+            send_mail(
+            subject='GamesHub Account Deletion Confirmation',
+            message='',
+            html_message= f'Your user account <b>{username}</b> deleted successfully',
+            from_email='gameshub.test@gmail.com',
+            recipient_list=[email_id],
+            fail_silently=False,
+            )
+            if int(otp) == gen_otp and (time_gen + 300 >= int(time.time())):
+                userObj.delete()
+                otpObj.delete()
+                return Response({"message": f"user account {username} deleted successfully!"}, status=status.HTTP_204_NO_CONTENT)
+            else:
+                return Response({"message": "OTP either expired or incorrect"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+        except Exception as e:
+            print(e)
+            return Response({"message": "Incorrect username entered or OTP not generated for this user"}, status=status.HTTP_400_BAD_REQUEST)

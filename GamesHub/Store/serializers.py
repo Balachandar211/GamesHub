@@ -10,6 +10,15 @@ class gamesSerializer(ModelSerializer):
         fields = '__all__'
 
 class cartSerializer(ModelSerializer):
+    user = serializers.SerializerMethodField()
+    games = serializers.SerializerMethodField()
+
     class Meta:
-        model  = Cart
-        fields = '__all__'
+        model = Cart
+        fields = ['user', 'games']
+
+    def get_user(self, obj):
+        return obj.user.get_username()
+
+    def get_games(self, obj):
+        return [game.get_name() for game in obj.games.all()]

@@ -32,6 +32,8 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'Login.auth.LenientJWTAuthentication', 
     ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
+    'PAGE_SIZE': 10  
 }
 
 AUTH_USER_MODEL = 'Login.AppUser'

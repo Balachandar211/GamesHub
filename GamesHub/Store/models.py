@@ -14,6 +14,9 @@ class Game(models.Model):
     platforms     = models.CharField(max_length=256)
     genre         = models.CharField(max_length=256)
 
+    def get_name(self):
+        return self.name
+
     def __str__(self):
         return self.name
 
@@ -21,3 +24,12 @@ class Game(models.Model):
 class Cart(models.Model):
     user          = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
     games         = models.ManyToManyField(Game)
+
+class Purchase(models.Model):
+    user          = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
+    games         = models.ManyToManyField(Game)
+
+class Library(models.Model):
+    user          = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
+    games         = models.ManyToManyField(Game)
+
