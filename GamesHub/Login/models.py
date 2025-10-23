@@ -29,7 +29,7 @@ class AppUser(AbstractUser):
 class OTP(models.Model):
     otp     = models.IntegerField()
     account = models.CharField(max_length=128)
-    time    = models.IntegerField(default=time.time())
+    time    = models.IntegerField()
 
     def get_details(self):
         return self.otp, self.time

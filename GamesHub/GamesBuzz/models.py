@@ -1,0 +1,25 @@
+from django.db import models
+from Login.models import AppUser
+from Store.models import Game
+from django.contrib.auth import get_user_model
+AppUser = get_user_model()
+# Create your models here.
+
+class GameInteraction(models.Model):
+    RATING_CHOICES = [
+        (0, '.....'),
+        (1, '*....'),
+        (2, '**...'),
+        (3, '***..'),
+        (4, '****.'),
+        (5, '*****'),
+        ]
+    user           = models.ForeignKey(AppUser, on_delete=models.CASCADE)
+    game           = models.ForeignKey(Game, on_delete=models.CASCADE)
+    comment        = models.TextField(blank=True)
+    rating         = models.PositiveSmallIntegerField(default= 0, choices=RATING_CHOICES, null=True, blank=True) 
+    purchase_date  = models.DateTimeField(auto_now_add=True)
+    purchase_price = models.FloatField(default=0)
+
+    class Meta:
+        unique_together = ('user', 'game') 

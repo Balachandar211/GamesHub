@@ -83,7 +83,7 @@ def Forgot_Password(request):
                 otpObj   = OTP.objects.get(account = request.data.get("username"))
                 otpObj.set_details(otp_num, time.time())
             else:    
-                otpObj   = OTP(otp=otp_num, account = request.data.get("username"))
+                otpObj   = OTP(otp=otp_num, account = request.data.get("username"), time = time.time())
             otpObj.save()
 
             send_mail(
@@ -115,7 +115,7 @@ def extendSession(request):
 @permission_classes([IsAuthenticated])
 def logout(request):
     refresh   = request.data.get("Refresh_Token")
-    if refresh is not None:
+    if refresh is None:
         return Response({"message":"Refresh token not provided"}, status=status.HTTP_400_BAD_REQUEST)
     try:
         user_name     = request.user.get_username()
@@ -134,14 +134,14 @@ def delete_user(request):
     email_id = userObj.get_email()
     username = request.user.get_username()
 
-    if request.data.get("OTP") is not None:
+    if request.data.get("OTP") is None:
         otp_num  = random.randint(1000, 9999)
 
         if OTP.objects.filter(account = username).exists():
             otpObj   = OTP.objects.get(account = username)
             otpObj.set_details(otp_num, time.time())
         else:    
-            otpObj   = OTP(otp=otp_num, account = username)
+            otpObj   = OTP(otp=otp_num, account = username, time = time.time())
         otpObj.save()
 
         send_mail(
@@ -177,5 +177,21 @@ def delete_user(request):
 
 
         except Exception as e:
-            print(e)
             return Response({"message": "Incorrect username entered or OTP not generated for this user"}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(["PATCH"])
+@permission_classes([IsAuthenticated])
+def update_user(request):
+    userObj            = request.user
+    if request.data.get("password") is not None:
+        return Response({"error": "use forgot_password endpoint to update password"}, status=status.HTTP_400_BAD_REQUEST)
+    allowed_keys = ['first_name', 'last_name', 'profilePicture', 'email', 'phoneNumber']
+    if not set(request.data.keys()).issubset(allowed_keys):
+        unexpected = set(request.data.keys()) - set(allowed_keys)
+        return Response({"error": f"unexpected keys {unexpected}"}, status=status.HTTP_400_BAD_REQUEST)
+
+    userObjectSerial   = userSerializer(userObj, data = request.data, partial=True)
+    if userObjectSerial.is_valid():
+        userObjectSerial.save()
+        return Response({"message": f"user {request.user.get_username()} updated successfully!"}, status=status.HTTP_202_ACCEPTED)
+    return Response({"error": userObjectSerial.errors}, status=status.HTTP_400_BAD_REQUEST)
