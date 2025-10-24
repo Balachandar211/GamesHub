@@ -10,10 +10,14 @@ from django.core.mail import send_mail
 import random
 import time
 from django.contrib.auth import get_user_model
+from django.http import HttpResponse
 User = get_user_model()
 
 
 # Create your views here.
+
+def api_redirect(request):
+    return HttpResponse("<h1> Incorrect endpoint please access /login for further</h1>")
 
 @api_view(["POST"])
 def SignUp(request):
@@ -29,7 +33,7 @@ def SignUp(request):
             subject='Welcome to GamesHub!',
             message='',
             html_message= f'Hi <b>{request.data.get('username')}</b> welcome to GamesHub an exclusive videogames marketplace!',
-            from_email='gameshub.test@gmail.com',
+            from_email='GamesHub <gameshub.test@gmail.com>',
             recipient_list=[request.data.get('email')],
             fail_silently=False,
             )
@@ -90,7 +94,7 @@ def Forgot_Password(request):
             subject='GamesHub Account Recovery',
             message='',
             html_message= f'Your otp to reset password <b>{otp_num}</b>',
-            from_email='gameshub.test@gmail.com',
+            from_email='GamesHub <gameshub.test@gmail.com>',
             recipient_list=[email_id],
             fail_silently=False,
             )
@@ -148,7 +152,7 @@ def delete_user(request):
         subject='GamesHub Account Deletion',
         message='',
         html_message= f'Your otp to delete account is <b>{otp_num}</b>',
-        from_email='gameshub.test@gmail.com',
+        from_email='GamesHub <gameshub.test@gmail.com>',
         recipient_list=[email_id],
         fail_silently=False,
         )
@@ -160,17 +164,18 @@ def delete_user(request):
         try:
             otpObj   = OTP.objects.get(account = username)
             gen_otp, time_gen = otpObj.get_details()
-            send_mail(
-            subject='GamesHub Account Deletion Confirmation',
-            message='',
-            html_message= f'Your user account <b>{username}</b> deleted successfully',
-            from_email='gameshub.test@gmail.com',
-            recipient_list=[email_id],
-            fail_silently=False,
-            )
+            
             if int(otp) == gen_otp and (time_gen + 300 >= int(time.time())):
                 userObj.delete()
                 otpObj.delete()
+                send_mail(
+                subject='GamesHub Account Deletion Confirmation',
+                message='',
+                html_message= f'Your user account <b>{username}</b> deleted successfully',
+                from_email='GamesHub <gameshub.test@gmail.com>',
+                recipient_list=[email_id],
+                fail_silently=False,
+                )
                 return Response({"message": f"user account {username} deleted successfully!"}, status=status.HTTP_204_NO_CONTENT)
             else:
                 return Response({"message": "OTP either expired or incorrect"}, status=status.HTTP_400_BAD_REQUEST)

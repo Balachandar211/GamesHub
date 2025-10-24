@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,10 +22,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-$ykc_2@8f5$+nve5f36^-8d+f)wm6o2*)ipd!enz7inyfn!59c'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY_GAMESHUB')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DJANGO_DEBUG_FLAG').lower() == 'true'
+
 
 ALLOWED_HOSTS = []
 
@@ -51,7 +53,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'Login',
     'Store',
-    'GamesBuzz'
+    'GamesBuzz',
+    'utills'
 
 ]
 
@@ -63,6 +66,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'utills.middleware.EndpointRedirectMiddleware'
 ]
 
 ROOT_URLCONF = 'GamesHub.urls'
@@ -110,7 +114,7 @@ EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'gameshub.test@gmail.com'
-EMAIL_HOST_PASSWORD = 'nahm rjgw lixd enth'  # Use App Password if 2FA is enabled
+EMAIL_HOST_PASSWORD = os.getenv('DJANGO_GMAIL_APP_PASSWORD')   # Use App Password if 2FA is enabled
 
 
 
