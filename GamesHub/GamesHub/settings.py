@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 from datetime import timedelta
 import os
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -26,7 +27,6 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY_GAMESHUB')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG_FLAG').lower() == 'true'
-
 
 ALLOWED_HOSTS = []
 
@@ -51,10 +51,11 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
-    'Login',
+    'storages',
+    'Login.app.LoginConfig',
     'Store',
     'GamesBuzz',
-    'utills'
+    'utills',
 
 ]
 
@@ -93,10 +94,10 @@ WSGI_APPLICATION = 'GamesHub.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=os.getenv("SUPABASE_DB_URL"),
+        engine="django.db.backends.postgresql"
+    )
 }
 
 SIMPLE_JWT = {

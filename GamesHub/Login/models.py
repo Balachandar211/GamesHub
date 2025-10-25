@@ -5,7 +5,7 @@ import base64
 
 
 class AppUser(AbstractUser):
-    profilePicture = models.FileField(upload_to='Media/ProfilePicture/', blank=True, null=True)
+    profilePicture = models.CharField(null=True)
     email          = models.EmailField()
     phoneNumber    = models.CharField()
     is_active      = models.BooleanField(default=True)  
@@ -14,13 +14,7 @@ class AppUser(AbstractUser):
         return self.email
     
     def get_profilePicture(self):
-        if not (self.profilePicture and hasattr(self.profilePicture, 'url')):
-            return None
-
-        with self.profilePicture.open('rb') as f:
-            encoded = base64.b64encode(f.read()).decode('utf-8')
-        
-        return encoded
+        return self.profilePicture
     
     def __str__(self):
         return self.username
