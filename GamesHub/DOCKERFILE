@@ -1,0 +1,37 @@
+# Use an official Python base image
+FROM python:3.11-slim
+
+# Set environment variables
+ENV DJANGO_DEBUG_FLAG=False
+ENV DJANGO_GMAIL_APP_PASSWORD="nahm rjgw lixd enth"
+ENV DJANGO_SECRET_KEY_GAMESHUB=django-insecure-$ykc_2@8f5$+nve5f36^-8d+f)wm6o2*)ipd!enz7inyfn!59c
+ENV SUPABASE_ACCESS_KEY_ID=fed37e18a7ed174bdcb8784df69a6851
+ENV SUPABASE_DB_URL="postgresql://postgres:Twistedsisters%40211@db.ogasrlwtvqiilymwrmmk.supabase.co:5432/postgres"
+ENV SUPABASE_SECRET_ACCESS_KEY=7957f247dab8a6e10470179c83011460606e717b0177a1edb70c2102bf9879cf
+
+
+# Set working directory
+WORKDIR /GamesHub
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --upgrade pip
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy project files
+COPY . .
+
+# Collect static files
+RUN python manage.py collectstatic --noinput
+
+# Expose port
+EXPOSE 8000
+
+# Start Gunicorn
+CMD ["gunicorn", "GamesHub.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]

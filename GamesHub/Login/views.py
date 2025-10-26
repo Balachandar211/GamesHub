@@ -11,13 +11,15 @@ import random
 import time
 from django.contrib.auth import get_user_model
 from django.http import HttpResponse
+from django.contrib.auth.hashers import check_password
 User = get_user_model()
 
 
 # Create your views here.
 
 def api_redirect(request):
-    return HttpResponse("<h1> Incorrect endpoint please access /login for further</h1>")
+    #return HttpResponse("<h1> Incorrect endpoint please access /login for further</h1>")
+    return HttpResponse("<h1> Hi Shinjit how are you from deployed webservice -Channie</h1>")
 
 @api_view(["POST"])
 def SignUp(request):
@@ -75,7 +77,7 @@ def Forgot_Password(request):
 
         except Exception as e:
             print(e)
-            return Response({"message": "Incorrect userName entered or OTP not generated for this user"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "Incorrect username entered or OTP not generated for this user"}, status=status.HTTP_400_BAD_REQUEST)
 
     else:
         try:
@@ -93,12 +95,12 @@ def Forgot_Password(request):
             send_mail(
             subject='GamesHub Account Recovery',
             message='',
-            html_message= f'Your otp to reset password <b>{otp_num}</b>',
+            html_message= f'Your otp to reset password for account <b>{request.data.get("username")}</b> is <b>{otp_num}</b>',
             from_email='GamesHub <gameshub.test@gmail.com>',
             recipient_list=[email_id],
             fail_silently=False,
             )
-            return Response({"message":f"otp sent to {email_id} for password reset for user account {request.data.get("username")}"}, status=status.HTTP_201_CREATED)
+            return Response({"message":f"otp sent to {email_id} for password reset for account {request.data.get("username")}"}, status=status.HTTP_201_CREATED)
         except Exception as e:
             print(e)
             return Response({"message":f"Incorrect Username {request.data.get("username")}"}, status=status.HTTP_400_BAD_REQUEST)
@@ -161,28 +163,61 @@ def delete_user(request):
 
     else:
         otp      = request.data.get("OTP")
-        try:
-            otpObj   = OTP.objects.get(account = username)
-            gen_otp, time_gen = otpObj.get_details()
+
+        if int(request.data.get("delete_permanently")) == 1:
             
-            if int(otp) == gen_otp and (time_gen + 300 >= int(time.time())):
-                userObj.delete()
-                otpObj.delete()
-                send_mail(
-                subject='GamesHub Account Deletion Confirmation',
-                message='',
-                html_message= f'Your user account <b>{username}</b> deleted successfully',
-                from_email='GamesHub <gameshub.test@gmail.com>',
-                recipient_list=[email_id],
-                fail_silently=False,
-                )
-                return Response({"message": f"user account {username} deleted successfully!"}, status=status.HTTP_204_NO_CONTENT)
-            else:
-                return Response({"message": "OTP either expired or incorrect"}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                otpObj   = OTP.objects.get(account = username)
+                gen_otp, time_gen = otpObj.get_details()
+                
+                if int(otp) == gen_otp and (time_gen + 300 >= int(time.time())):
+                    if check_password(request.data.get("password"), userObj.get_password()):
+                        userObj.delete()
+                        otpObj.delete()
+                        send_mail(
+                        subject='GamesHub Account Deletion Confirmation',
+                        message='',
+                        html_message= f'Your user account <b>{username}</b> deleted permanently',
+                        from_email='GamesHub <gameshub.test@gmail.com>',
+                        recipient_list=[email_id],
+                        fail_silently=False,
+                        )
+                        return Response({"message": f"user account {username} deleted permanently"}, status=status.HTTP_204_NO_CONTENT)
+                    else:
+                        return Response({"message": f"incorrect password for user account {username}"}, status=status.HTTP_400_BAD_REQUEST)
+                                   
+                else:
+                    return Response({"message": "OTP either expired or incorrect"}, status=status.HTTP_400_BAD_REQUEST)
 
 
-        except Exception as e:
-            return Response({"message": "Incorrect username entered or OTP not generated for this user"}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                return Response({"message": "Incorrect username entered or OTP not generated for this user"}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            try:
+                otpObj   = OTP.objects.get(account = username)
+                gen_otp, time_gen = otpObj.get_details()
+                
+                if int(otp) == gen_otp and (time_gen + 300 >= int(time.time())):
+                    userObj.change_status()
+                    userObj.save()
+                    send_mail(
+                    subject='GamesHub Account Deletion Confirmation',
+                    message='',
+                    html_message= f'Your user account <b>{username}</b> deleted successfully and can be recovered within 30 days',
+                    from_email='GamesHub <gameshub.test@gmail.com>',
+                    recipient_list=[email_id],
+                    fail_silently=False,
+                    )
+                    return Response({"message": f"user account {username} deleted successfully and can be recovered within 30 days"}, status=status.HTTP_204_NO_CONTENT)
+                else:
+                    return Response({"message": "OTP either expired or incorrect"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+            except Exception as e:
+                return Response({"message": "Incorrect username entered or OTP not generated for this user"}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+
 
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated])
@@ -200,3 +235,64 @@ def update_user(request):
         userObjectSerial.save()
         return Response({"message": f"user {request.user.get_username()} updated successfully!"}, status=status.HTTP_202_ACCEPTED)
     return Response({"error": userObjectSerial.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["POST"])
+def recover_user(request):
+    if "OTP" in request.data:
+        otp      = request.data.get("OTP")
+        try:
+            userObj  = User.objects.get(username = request.data.get("username"))
+            otpObj   = OTP.objects.get(account = request.data.get("username"))
+            gen_otp, time_gen = otpObj.get_details()
+
+            if int(otp) == gen_otp and (time_gen + 300 >= int(time.time())):
+                if check_password(request.data.get("password"), userObj.get_password()):
+                    userObj.change_status()
+                    userObj.save()
+                    otpObj.delete()
+                    send_mail(
+                    subject='GamesHub Account Recovery',
+                    message='',
+                    html_message= f'Your account <b>{request.data.get("username")}</b> recovered successfully!',
+                    from_email='GamesHub <gameshub.test@gmail.com>',
+                    recipient_list=[email_id],
+                    fail_silently=False,
+                    )
+                    return Response({"message": f"account recovery successfull for {request.data.get("username")}"}, status=status.HTTP_202_ACCEPTED)
+                else:
+                    return Response({"message": f"Incorrect password for account {request.data.get("username")}"}, status=status.HTTP_400_BAD_REQUEST)            
+            else:
+                return Response({"message": "OTP either expired or incorrect"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+        except Exception as e:
+            print(e)
+            return Response({"message": "Incorrect username entered or OTP not generated for this user"}, status=status.HTTP_400_BAD_REQUEST)
+
+    else:
+        try:
+            userObj  = User.objects.get(username = request.data.get("username"))
+            email_id = userObj.get_email()
+            otp_num  = random.randint(1000, 9999)
+
+            if OTP.objects.filter(account = request.data.get("username")).exists():
+                otpObj   = OTP.objects.get(account = request.data.get("username"))
+                otpObj.set_details(otp_num, time.time())
+            else:    
+                otpObj   = OTP(otp=otp_num, account = request.data.get("username"), time = time.time())
+            otpObj.save()
+
+            send_mail(
+            subject='GamesHub Account Recovery',
+            message='',
+            html_message= f'Your otp to recover account <b>{request.data.get("username")}</b> is <b>{otp_num}</b>',
+            from_email='GamesHub <gameshub.test@gmail.com>',
+            recipient_list=[email_id],
+            fail_silently=False,
+            )
+            return Response({"message":f"otp sent to {email_id} for account recovery for user account {request.data.get("username")}"}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            print(e)
+            return Response({"message":f"Incorrect Username {request.data.get("username")}"}, status=status.HTTP_400_BAD_REQUEST)
+

@@ -6,7 +6,7 @@ from utills.storage_supabase import upload_file_to_supabase
 User = get_user_model()
 
 class userSerializer(ModelSerializer):
-    profilePicture = serializers.ImageField(write_only=True)
+    profilePicture = serializers.ImageField(write_only=True, allow_null=True, required=False, default=None)
     class Meta:
         model = User
         fields = '__all__'
@@ -21,8 +21,9 @@ class userSerializer(ModelSerializer):
 
     def validate_profilePicture(self, profilePicture):
         valid_mime_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
-        if profilePicture.content_type not in valid_mime_types:
+        if profilePicture and profilePicture.content_type not in valid_mime_types:
             raise profilePicture("Only image files (JPEG, PNG, GIF, WEBP) are allowed.")
-        
-        public_url = upload_file_to_supabase(profilePicture, "ProfilePicture")
-        return public_url
+        if profilePicture:
+            public_url = upload_file_to_supabase(profilePicture, "ProfilePicture")
+            return public_url
+        return None
