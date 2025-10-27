@@ -10,13 +10,15 @@ https://docs.djangoproject.com/en/5.2/howto/deployment/wsgi/
 import os
 import socket
 
-# Force IPv4 resolution
-original_getaddrinfo = socket.getaddrinfo
+# Monkey-patch DNS resolution to prefer IPv4
+def force_ipv4_only():
+    original_getaddrinfo = socket.getaddrinfo
+    def getaddrinfo_ipv4(*args, **kwargs):
+        return [info for info in original_getaddrinfo(*args, **kwargs) if info[0] == socket.AF_INET]
+    socket.getaddrinfo = getaddrinfo_ipv4
 
-def getaddrinfo_ipv4(*args, **kwargs):
-    return [info for info in original_getaddrinfo(*args, **kwargs) if info[0] == socket.AF_INET]
+force_ipv4_only()
 
-socket.getaddrinfo = getaddrinfo_ipv4
 
 
 
