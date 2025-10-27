@@ -10,16 +10,17 @@ from django.core.mail import send_mail
 import random
 import time
 from django.contrib.auth import get_user_model
-from django.http import HttpResponse
 from django.contrib.auth.hashers import check_password
 User = get_user_model()
 
 
-# def health_check(request):
-#     return Response({"message":"up and running"}, status=status.HTTP_200_OK)
+@api_view(["GET"])
+def health_check(request):
+    return Response({"message":"up and running"}, status=status.HTTP_200_OK)
 
+@api_view(["GET"])
 def api_redirect(request):
-    return HttpResponse("Incorrect url entered")
+    return Response({"message": "requested end point not found"}, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(["POST"])
 def SignUp(request):
