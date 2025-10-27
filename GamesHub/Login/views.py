@@ -1,4 +1,3 @@
-from django.shortcuts import render
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from .models import OTP
@@ -11,6 +10,7 @@ import random
 import time
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password
+from django.http import HttpResponse
 User = get_user_model()
 
 
