@@ -1,6 +1,6 @@
 
 from django.urls import path
-from .views import SignUp, Login, Forgot_Password, extendSession, logout, delete_user, update_user, api_redirect, recover_user
+from .views import SignUp, Login, Forgot_Password, extendSession, logout, delete_user, update_user, api_redirect, recover_user, health_check
 
 urlpatterns = [
     path('signup', SignUp),
@@ -11,5 +11,7 @@ urlpatterns = [
     path('delete_user', delete_user),
     path('update_user', update_user),
     path('not_found', api_redirect, name = 'api_redirect'),
-    path('recover_user', recover_user)
+    path('recover_user', recover_user),
+    path('', health_check),
+    path('/healthz', health_check)
 ]
