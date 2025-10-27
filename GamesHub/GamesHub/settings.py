@@ -59,6 +59,9 @@ INSTALLED_APPS = [
 
 ]
 
+ALLOWED_HOSTS = ["gameshub-test.onrender.com"]
+
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
