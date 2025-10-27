@@ -59,7 +59,7 @@ INSTALLED_APPS = [
 
 ]
 
-ALLOWED_HOSTS = ["gameshub-test.onrender.com"]
+ALLOWED_HOSTS = ["gameshub-test.onrender.com", "localhost"]
 
 
 MIDDLEWARE = [

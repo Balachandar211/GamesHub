@@ -10,6 +10,8 @@ https://docs.djangoproject.com/en/5.2/howto/deployment/wsgi/
 import os
 import socket
 
+import socket
+
 # Monkey-patch DNS resolution to prefer IPv4
 def force_ipv4_only():
     original_getaddrinfo = socket.getaddrinfo
@@ -18,8 +20,6 @@ def force_ipv4_only():
     socket.getaddrinfo = getaddrinfo_ipv4
 
 force_ipv4_only()
-
-
 
 
 from django.core.wsgi import get_wsgi_application
