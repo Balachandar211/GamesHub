@@ -10,8 +10,6 @@ urlpatterns = [
     path('logout', logout),
     path('delete_user', delete_user),
     path('update_user', update_user),
-    path('not_found', api_redirect, name = 'api_redirect'),
-    path('recover_user', recover_user),
-    path('', health_check),
-    path('/healthz', health_check)
+    path('', api_redirect, name = 'api_redirect'),
+    path('recover_user', recover_user)
 ]

@@ -15,13 +15,11 @@ from django.contrib.auth.hashers import check_password
 User = get_user_model()
 
 
-@api_view(["GET"])
-def health_check(request):
-    return Response({"message":"up and running"}, status=status.HTTP_200_OK)
+# def health_check(request):
+#     return Response({"message":"up and running"}, status=status.HTTP_200_OK)
 
-@api_view(["GET"])
 def api_redirect(request):
-    return Response({"message": "requested end point not found"}, status=status.HTTP_404_NOT_FOUND)
+    return HttpResponse("Incorrect url entered")
 
 @api_view(["POST"])
 def SignUp(request):
