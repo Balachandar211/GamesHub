@@ -16,10 +16,9 @@ User = get_user_model()
 
 
 # Create your views here.
-
+@api_view(["GET"])
 def api_redirect(request):
-    #return HttpResponse("<h1> Incorrect endpoint please access /login for further</h1>")
-    return HttpResponse("<h1> Hi Shinjit how are you from deployed webservice -Channie</h1>")
+    return Response({"message": "requested end point not found"}, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(["POST"])
 def SignUp(request):
