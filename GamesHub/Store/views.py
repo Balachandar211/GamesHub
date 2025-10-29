@@ -1,4 +1,3 @@
-from django.shortcuts import render
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -7,47 +6,26 @@ from .permissions import IsAdminOrReadOnly
 from .models import Game, Cart, Wishlist
 from .serializers import gamesSerializer, cartSerializer, wishlistSerializer
 from django.contrib.auth import get_user_model
-from rest_framework.pagination import LimitOffsetPagination
+from utills.microservices import search
 User = get_user_model()
 
-# Microservice for Search
-def search(request):
-    paginator = LimitOffsetPagination()
-    if request.user and request.user.is_authenticated:
-        if request.user.is_staff:
-            greeting = f"admin user {request.user.get_username()}"
-        else:
-            greeting = f"user {request.user.get_username()}"
-    else:
-        greeting = "guest user"
-    
-    try:
-        profile_picture = request.user.get_profilePicture()
-    except:
-        profile_picture = 'NA'
-
-    if request.query_params.get('name') is not None:
-        gameObjs = Game.objects.filter(name__icontains = request.query_params.get('name'))
-        paginated_games = paginator.paginate_queryset(gameObjs, request)
-        gamesSerial = gamesSerializer(paginated_games, many=True)
-        return Response({"message": f"Hi {greeting}", 'next': paginator.get_next_link(), 'previous': paginator.get_previous_link(), "Catalogue":gamesSerial.data,"Profile_Picture": profile_picture}, status=status.HTTP_200_OK)
-    
-    gameObjs    = Game.objects.all()
-    paginated_games = paginator.paginate_queryset(gameObjs, request)
-    gamesSerial = gamesSerializer(paginated_games, many=True)
-    return Response({"message": f"Hi {greeting}", 'next': paginator.get_next_link(), 'previous': paginator.get_previous_link(), "Catalogue":gamesSerial.data,"Profile_Picture":profile_picture}, status=status.HTTP_200_OK)
-    
 
 @api_view(["GET"])
 def Home(request):
-    return search(request)
+    greeting, paginator, gamesSerial, profile_picture = search(request)
+    return Response({"message": f"Hi {greeting}", 'next': paginator.get_next_link(), 'previous': paginator.get_previous_link(), "Catalogue":gamesSerial.data,"Profile_Picture":profile_picture}, status=status.HTTP_200_OK)
+    
+
     
 
 @api_view(["GET", "POST", "PATCH", "DELETE"])
 @permission_classes([IsAdminOrReadOnly])
 def gamesAdmin(request):
     if request.method == "GET":
-        return search(request)
+        greeting, paginator, gamesSerial, profile_picture = search(request)
+        return Response({"message": f"Hi {greeting}", 'next': paginator.get_next_link(), 'previous': paginator.get_previous_link(), "Catalogue":gamesSerial.data,"Profile_Picture":profile_picture}, status=status.HTTP_200_OK)
+    
+
     
     if request.method == "POST":
         if isinstance(request.data, dict):
@@ -111,7 +89,6 @@ def gamesAdmin(request):
                 
             return Response({"message":f"game(s) updated successfully!", "Success_Status":success_dict, "Error_Status":error_dict}, status=status.HTTP_201_CREATED)
         
-        return Response({"message": "Invalid data entered"}, status=status.HTTP_400_BAD_REQUEST)
     
     if request.method == "DELETE":
         success_dict = {}

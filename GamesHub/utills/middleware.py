@@ -6,9 +6,6 @@ class EndpointRedirectMiddleware(MiddlewareMixin):
     def process_request(self, request):
         path = request.path_info
         
-        if path == '/':
-            return None   
-
         try:
             resolve(path)
             return None

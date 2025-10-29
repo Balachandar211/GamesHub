@@ -5,7 +5,7 @@ from django.contrib.auth.models import AbstractUser
 class AppUser(AbstractUser):
     profilePicture = models.CharField(null=True, default=None, blank=True)
     email          = models.EmailField()
-    phoneNumber    = models.CharField(null=True, default=None)
+    phoneNumber    = models.CharField(max_length=15, null=True, default=None)
     is_active      = models.BooleanField(default=True)  
 
     def get_email(self):

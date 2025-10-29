@@ -98,7 +98,7 @@ WSGI_APPLICATION = 'GamesHub.wsgi.application'
 
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.getenv("SUPABASE_DB_URL"),
+        default=os.getenv("NEON_DB_URL"),
         engine="django.db.backends.postgresql"
     )
 }
@@ -115,11 +115,12 @@ SIMPLE_JWT = {
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
+EMAIL_PORT = 465
+EMAIL_USE_TLS = False
+EMAIL_USE_SSL = True
 EMAIL_HOST_USER = 'gameshub.test@gmail.com'
-EMAIL_HOST_PASSWORD = os.getenv('DJANGO_GMAIL_APP_PASSWORD')   # Use App Password if 2FA is enabled
-
+EMAIL_HOST_PASSWORD = os.getenv('DJANGO_GMAIL_APP_PASSWORD')  
+DEFAULT_FROM_EMAIL = 'gameshub.test@gmail.com'
 
 
 # Password validation

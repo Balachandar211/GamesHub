@@ -14,7 +14,7 @@ class Game(models.Model):
     developer     = models.CharField(max_length=256)
     platforms     = models.CharField(max_length=256)
     genre         = models.CharField(max_length=256)
-    discount      = models.FloatField(default=0, validators=[MinValueValidator(0.0), MaxValueValidator(1.0)])
+    discount      = models.FloatField(default=0, validators=[MinValueValidator(0.0), MaxValueValidator(100)])
 
     def get_name(self):
         return self.name
@@ -23,8 +23,8 @@ class Game(models.Model):
         return self.name
     
     def get_price(self):
-        return self.price - (self.price * self.discount)
-
+        return (self.price - (self.price * (self.discount)/100)) + (self.price - (self.price * (self.discount)/100))*0.18
+    
 
 class Cart(models.Model):
     user          = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
