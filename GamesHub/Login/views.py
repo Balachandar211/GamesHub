@@ -10,16 +10,9 @@ import random
 import time
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password
+from utills.microservices import mail_service
 User = get_user_model()
 
-
-@api_view(["GET"])
-def health_check(request):
-    return Response({"message":"up and running"}, status=status.HTTP_200_OK)
-
-@api_view(["GET"])
-def api_redirect(request):
-    return Response({"message": "requested end point not found"}, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(["POST"])
 def SignUp(request):
@@ -31,14 +24,16 @@ def SignUp(request):
     if userObject.is_valid():
         userObject = userObject.save()
         refresh = RefreshToken.for_user(userObject)
-        send_mail(
-            subject='Welcome to GamesHub!',
-            message='',
-            html_message= f'Hi <b>{request.data.get('username')}</b> welcome to GamesHub an exclusive videogames marketplace!',
-            from_email='GamesHub <gameshub.test@gmail.com>',
-            recipient_list=[request.data.get('email')],
-            fail_silently=False,
-            )
+
+        Subject    = 'Welcome to GamesHub!'
+        message    = f'Hi <b>{request.data.get('username')}</b> welcome to GamesHub an exclusive videogames marketplace!'
+        recepients = [request.data.get('email')]
+
+        mail_result, message_response = mail_service(Subject, message, recepients)
+
+        if not mail_result:
+            Response({"errors":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         return Response({"message": f"User {request.data.get('username')} added successfully", "Access_Token":str(refresh.access_token), "Refresh_Token":str(refresh)}, status=status.HTTP_201_CREATED)
     
     return Response({"errors":userObject.errors}, status=status.HTTP_400_BAD_REQUEST)
@@ -92,14 +87,15 @@ def Forgot_Password(request):
                 otpObj   = OTP(otp=otp_num, account = request.data.get("username"), time = time.time())
             otpObj.save()
 
-            send_mail(
-            subject='GamesHub Account Recovery',
-            message='',
-            html_message= f'Your otp to reset password for account <b>{request.data.get("username")}</b> is <b>{otp_num}</b>',
-            from_email='GamesHub <gameshub.test@gmail.com>',
-            recipient_list=[email_id],
-            fail_silently=False,
-            )
+            Subject    = 'GamesHub Account Recovery'
+            message    = f'Your otp to reset password for account <b>{request.data.get("username")}</b> is <b>{otp_num}</b>'
+            recepients = [email_id]
+
+            mail_result, message_response = mail_service(Subject, message, recepients)
+
+            if not mail_result:
+                Response({"errors":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
             return Response({"message":f"otp sent to {email_id} for password reset for account {request.data.get("username")}"}, status=status.HTTP_201_CREATED)
         except Exception as e:
             print(e)
@@ -150,14 +146,15 @@ def delete_user(request):
             otpObj   = OTP(otp=otp_num, account = username, time = time.time())
         otpObj.save()
 
-        send_mail(
-        subject='GamesHub Account Deletion',
-        message='',
-        html_message= f'Your otp to delete account is <b>{otp_num}</b>',
-        from_email='GamesHub <gameshub.test@gmail.com>',
-        recipient_list=[email_id],
-        fail_silently=False,
-        )
+        
+        Subject    = 'GamesHub Account Deletion'
+        message    = f'Your otp to delete account is <b>{otp_num}</b>'
+        recepients = [email_id]
+
+        mail_result, message_response = mail_service(Subject, message, recepients)
+
+        if not mail_result:
+            Response({"errors":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({"message": f"OTP created successfully for account deletion for user {username}"}, status=status.HTTP_201_CREATED)
 
@@ -174,14 +171,16 @@ def delete_user(request):
                     if check_password(request.data.get("password"), userObj.get_password()):
                         userObj.delete()
                         otpObj.delete()
-                        send_mail(
-                        subject='GamesHub Account Deletion Confirmation',
-                        message='',
-                        html_message= f'Your user account <b>{username}</b> deleted permanently',
-                        from_email='GamesHub <gameshub.test@gmail.com>',
-                        recipient_list=[email_id],
-                        fail_silently=False,
-                        )
+
+                        Subject    = 'GamesHub Account Deletion Confirmation'
+                        message    = f'Your user account <b>{username}</b> deleted permanently'
+                        recepients = [email_id]
+
+                        mail_result, message_response = mail_service(Subject, message, recepients)
+
+                        if not mail_result:
+                            Response({"errors":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
                         return Response({"message": f"user account {username} deleted permanently"}, status=status.HTTP_204_NO_CONTENT)
                     else:
                         return Response({"message": f"incorrect password for user account {username}"}, status=status.HTTP_400_BAD_REQUEST)
@@ -200,14 +199,16 @@ def delete_user(request):
                 if int(otp) == gen_otp and (time_gen + 300 >= int(time.time())):
                     userObj.change_status()
                     userObj.save()
-                    send_mail(
-                    subject='GamesHub Account Deletion Confirmation',
-                    message='',
-                    html_message= f'Your user account <b>{username}</b> deleted successfully and can be recovered within 30 days',
-                    from_email='GamesHub <gameshub.test@gmail.com>',
-                    recipient_list=[email_id],
-                    fail_silently=False,
-                    )
+
+                    Subject    = 'GamesHub Account Deletion Confirmation'
+                    message    = f'Your user account <b>{username}</b> deleted successfully and can be recovered within 30 days'
+                    recepients = [email_id]
+
+                    mail_result, message_response = mail_service(Subject, message, recepients)
+
+                    if not mail_result:
+                        Response({"errors":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
                     return Response({"message": f"user account {username} deleted successfully and can be recovered within 30 days"}, status=status.HTTP_204_NO_CONTENT)
                 else:
                     return Response({"message": "OTP either expired or incorrect"}, status=status.HTTP_400_BAD_REQUEST)
@@ -251,14 +252,16 @@ def recover_user(request):
                     userObj.change_status()
                     userObj.save()
                     otpObj.delete()
-                    send_mail(
-                    subject='GamesHub Account Recovery',
-                    message='',
-                    html_message= f'Your account <b>{request.data.get("username")}</b> recovered successfully!',
-                    from_email='GamesHub <gameshub.test@gmail.com>',
-                    recipient_list=[email_id],
-                    fail_silently=False,
-                    )
+
+                    Subject    = 'GamesHub Account Recovery'
+                    message    = f'Your account <b>{request.data.get("username")}</b> recovered successfully!'
+                    recepients = [email_id]
+
+                    mail_result, message_response = mail_service(Subject, message, recepients)
+
+                    if not mail_result:
+                        Response({"errors":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
                     return Response({"message": f"account recovery successfull for {request.data.get("username")}"}, status=status.HTTP_202_ACCEPTED)
                 else:
                     return Response({"message": f"Incorrect password for account {request.data.get("username")}"}, status=status.HTTP_400_BAD_REQUEST)            
@@ -283,14 +286,15 @@ def recover_user(request):
                 otpObj   = OTP(otp=otp_num, account = request.data.get("username"), time = time.time())
             otpObj.save()
 
-            send_mail(
-            subject='GamesHub Account Recovery',
-            message='',
-            html_message= f'Your otp to recover account <b>{request.data.get("username")}</b> is <b>{otp_num}</b>',
-            from_email='GamesHub <gameshub.test@gmail.com>',
-            recipient_list=[email_id],
-            fail_silently=False,
-            )
+            Subject    = 'GamesHub Account Recovery'
+            message    = f'Your otp to recover account <b>{request.data.get("username")}</b> is <b>{otp_num}</b>'
+            recepients = [email_id]
+
+            mail_result, message_response = mail_service(Subject, message, recepients)
+
+            if not mail_result:
+                Response({"errors":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
             return Response({"message":f"otp sent to {email_id} for account recovery for user account {request.data.get("username")}"}, status=status.HTTP_201_CREATED)
         except Exception as e:
             print(e)

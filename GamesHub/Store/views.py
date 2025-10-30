@@ -95,7 +95,7 @@ def gamesAdmin(request):
         failure_dict = {}
         try:
             if request.data.get('id') is not None:
-                for id in eval(request.data.get('id')):
+                for id in request.data.get('id'):
                     if Game.objects.filter(id = id).exists():
                         gameObj   = Game.objects.get(id = id)
                         game_name = gameObj.get_name()
@@ -107,7 +107,7 @@ def gamesAdmin(request):
                 return Response({"message": f"Games deleted successfully!", "Success_Status":success_dict, "Failure_Status": failure_dict}, status=status.HTTP_204_NO_CONTENT)
             
             if request.data.get('name') is not None:
-                for name in eval(request.data.get('name')):
+                for name in request.data.get('name'):
                     if Game.objects.filter(name = name).exists():
                         gameObj   = Game.objects.get(name = name)
                         game_name = gameObj.get_name()
@@ -141,7 +141,7 @@ def userCart(request):
                 success_dict = {}
                 failure_dict = {}
                 gamesObjList = []
-                for g in eval(request.data.get("id")):
+                for g in request.data.get("id"):
                     if Game.objects.filter(id = g).exists():
                         gamesObj = Game.objects.get(id = g)
                         gamesObjList.append(gamesObj)
@@ -162,7 +162,7 @@ def userCart(request):
             try:
                 success_dict = {}
                 failure_dict = {}
-                for g in eval(request.data.get("id")):
+                for g in request.data.get("id"):
                     if Game.objects.filter(id = g).exists():
                         gamesObj = Game.objects.get(id = g)
                         cart.games.add(gamesObj)
@@ -200,7 +200,7 @@ def WishlistUser(request):
                 success_dict = {}
                 failure_dict = {}
                 gamesObjList = []
-                for g in eval(request.data.get("id")):
+                for g in request.data.get("id"):
                     if Game.objects.filter(id = g).exists():
                         gamesObj = Game.objects.get(id = g)
                         gamesObjList.append(gamesObj)
@@ -221,7 +221,7 @@ def WishlistUser(request):
             try:
                 success_dict = {}
                 failure_dict = {}
-                for g in eval(request.data.get("id")):
+                for g in request.data.get("id"):
                     if Game.objects.filter(id = g).exists():
                         gamesObj = Game.objects.get(id = g)
                         WishlistObj.games.add(gamesObj)

@@ -2,6 +2,8 @@ from rest_framework.pagination import LimitOffsetPagination
 from Store.models import Game
 from Store.serializers import gamesSerializer
 from .models import Constants
+import requests
+import os
 
 # Microservice to get User and User Type
 def requested_user(request):    
@@ -63,3 +65,41 @@ def transaction_id_generator():
     transaction_obj.set_value(transaction_id)
     transaction_obj.save()
     return transaction_id
+
+FLASK_MAILER_API_KEY = os.getenv("FLASK_MAILER_API_KEY")
+
+# Microservice for Email servive
+def mail_service(Subject, message, recepients):
+    if False: #Logic to use django method if web service hosting platfors allow SMTP traffic
+        try:
+            send_mail(
+                subject=Subject,
+                message='',
+                html_message= message,
+                from_email='GamesHub <gameshub.test@gmail.com>',
+                recipient_list=[recepients],
+                fail_silently=False,
+                )
+            
+            return True, "Email sent successfully"
+        except:
+            return False, "Email sending failed"
+    else:
+
+            url = "https://gameshubmailer.pythonanywhere.com//mailer"
+            headers = {
+                "Content-Type": "application/json",
+                "API-Key": FLASK_MAILER_API_KEY
+            }
+            payload = {
+                "Subject": Subject,
+                "Recepient": recepients,
+                "Body": message
+            }
+
+            response = requests.post(url, json=payload, headers=headers)
+
+            if response.status_code == 200:
+                return True, "Email sent successfully"
+            else:
+                return False, "Email sending failed"

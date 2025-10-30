@@ -35,7 +35,10 @@ REST_FRAMEWORK = {
         'Login.auth.LenientJWTAuthentication', 
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
-    'PAGE_SIZE': 10  
+    'PAGE_SIZE': 10 ,
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+    ]
 }
 
 AUTH_USER_MODEL = 'Login.AppUser'
@@ -115,11 +118,11 @@ SIMPLE_JWT = {
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 465
-EMAIL_USE_TLS = False
-EMAIL_USE_SSL = True
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
 EMAIL_HOST_USER = 'gameshub.test@gmail.com'
-EMAIL_HOST_PASSWORD = os.getenv('DJANGO_GMAIL_APP_PASSWORD')  
+EMAIL_HOST_PASSWORD = os.getenv('API_GMAIL_APP_PASSWORD')  
 DEFAULT_FROM_EMAIL = 'gameshub.test@gmail.com'
 
 
