@@ -23,6 +23,7 @@ urlpatterns = [
     path('store/', include('Store.urls')),
     path('game/', include('GamesBuzz.urls')),
     path('utills/', include('utills.urls')),
-    path('', include('utills.urls_health'))
+    path('', include('utills.urls_health')),
+    path('gamesadmin/', include('GamesAdmin.urls'))
 
 ]

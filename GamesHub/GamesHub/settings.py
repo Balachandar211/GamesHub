@@ -54,15 +54,19 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
+    'django_celery_beat',
     'storages',
-    'Login.app.LoginConfig',
+    'Login',
     'Store',
     'GamesBuzz',
-    'utills',
+    'utills'
 
 ]
 
 ALLOWED_HOSTS = ["gameshub-test.onrender.com", "localhost"]
+
+CELERY_BROKER_URL = os.getenv('REDIS_DB_URL')
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 
 MIDDLEWARE = [

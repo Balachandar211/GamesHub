@@ -5,21 +5,31 @@ from .serializers import userSerializer
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.core.mail import send_mail
 import random
 import time
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password
 from utills.microservices import mail_service
+import requests
+import os
 User = get_user_model()
 
+EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
 
 @api_view(["POST"])
 def SignUp(request):
-    userObject     = userSerializer(data = request.data)
-
     if User.objects.filter(username = request.data.get("username")).exists():
         return Response({"message": "Username already Exists"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # API to check if email ID provided is valid
+    email_check_response = requests.get(f"https://emailreputation.abstractapi.com/v1/?api_key={EMAIL_CHECKER_API_KEY}&email={request.data.get('email')}")
+    
+    email_check_response = email_check_response.json()
+
+    if not email_check_response["email_deliverability"]["is_smtp_valid"]:
+        return  Response({"error":"Incorrect email ID provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+    userObject     = userSerializer(data = request.data)
 
     if userObject.is_valid():
         userObject = userObject.save()
@@ -31,12 +41,23 @@ def SignUp(request):
 
         mail_result, message_response = mail_service(Subject, message, recepients)
 
-        if not mail_result:
-            Response({"errors":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        return Response({"message": f"User {request.data.get('username')} added successfully", "Access_Token":str(refresh.access_token), "Refresh_Token":str(refresh)}, status=status.HTTP_201_CREATED)
+        response = Response({"message": f"User {request.data.get('username')} added successfully", "Access_Token":str(refresh.access_token)}, status=status.HTTP_201_CREATED)
     
-    return Response({"errors":userObject.errors}, status=status.HTTP_400_BAD_REQUEST)
+        response.set_cookie(
+                key='Refresh_Token',
+                value=str(refresh),
+                httponly=True,
+                secure=True,
+                samesite='Strict',
+                max_age=7 * 24 * 60 * 60
+            )
+
+        if not mail_result:
+            Response({"error":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return response
+    
+    return Response({"error":userObject.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(["POST"])
 def Login(request):
@@ -44,7 +65,19 @@ def Login(request):
         userObj = User.objects.get(username = request.data.get("username"))
         if userObj.check_password(request.data.get("password")):
             refresh = RefreshToken.for_user(userObj)
-            return Response({"message": f"User {userObj.get_username()} logged in", "Access_Token":str(refresh.access_token), "Refresh_Token":str(refresh)}, status=status.HTTP_200_OK)
+
+            response = Response({"message": f"User {userObj.get_username()} logged in", "Access_Token":str(refresh.access_token)}, status=status.HTTP_200_OK)
+
+            response.set_cookie(
+                key='Refresh_Token',
+                value=str(refresh),
+                httponly=True,
+                secure=True,
+                samesite='Strict',
+                max_age=7 * 24 * 60 * 60
+            )
+
+            return response
         else:
             return Response({"message":f"Incorrect password for user {userObj.get_username()}"}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
@@ -65,7 +98,7 @@ def Forgot_Password(request):
                 userObj.set_password(request.data.get("password"))
                 userObj.save()
                 otpObj.delete()
-                return Response({"message": f"Password change successfull for account {request.data.get("username")}"}, status=status.HTTP_202_ACCEPTED)
+                return Response({"message": f"Password change successfull for account {request.data.get("username")} please continue login"}, status=status.HTTP_202_ACCEPTED)
             else:
                 return Response({"message": "OTP either expired or incorrect"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -104,9 +137,9 @@ def Forgot_Password(request):
 
 @api_view(["POST"])
 def extendSession(request):
-    refresh   = request.data.get("Refresh_Token")
+    refresh   = request.COOKIES.get('Refresh_Token')
     if not refresh:
-        return Response({"message":"Refresh token not provided"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"message":"Refresh token cookie not found"}, status=status.HTTP_400_BAD_REQUEST)
     try:
         refresh_token = RefreshToken(refresh)
         return Response({"message":"Access Token generated successfully", "Access_Token":str(refresh_token.access_token)}, status=status.HTTP_200_OK)
@@ -116,14 +149,17 @@ def extendSession(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def logout(request):
-    refresh   = request.data.get("Refresh_Token")
+    refresh   = request.COOKIES.get('Refresh_Token')
     if refresh is None:
-        return Response({"message":"Refresh token not provided"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"message":"Refresh token cookie not found"}, status=status.HTTP_400_BAD_REQUEST)
     try:
         user_name     = request.user.get_username()
         refresh_token = RefreshToken(refresh)
         refresh_token.blacklist()
-        return Response({"message":f"user {user_name} logged out successfully!"}, status=status.HTTP_205_RESET_CONTENT)
+        response = Response({"message":f"user {user_name} logged out successfully!"}, status=status.HTTP_205_RESET_CONTENT)
+        response.delete_cookie('Refresh_Token')
+
+        return response
     except Exception as e:
         print(e)
         return Response({"message":"Refresh token incorrect or expired"}, status=status.HTTP_401_UNAUTHORIZED)

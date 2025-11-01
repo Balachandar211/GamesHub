@@ -86,7 +86,7 @@ def mail_service(Subject, message, recepients):
             return False, "Email sending failed"
     else:
 
-            url = "https://gameshubmailer.pythonanywhere.com//mailer"
+            url = "https://gameshubmailer.pythonanywhere.com/mailer"
             headers = {
                 "Content-Type": "application/json",
                 "API-Key": FLASK_MAILER_API_KEY
