@@ -16,7 +16,7 @@ def purchase(request):
     to_buy  = {}
     na_list = {}
     total_price = 0
-    for id in eval(request.data.get("id")):
+    for id in request.data.get("id"):
         try:
             gameObj      = Game.objects.get(id = id)
             to_buy[id]   = gamesSerializerSimplified(gameObj).data
@@ -34,7 +34,7 @@ def purchase(request):
 @permission_classes([IsAuthenticated])
 def buy(request):
     transaction_ids = {}
-    for id in eval(request.data.get("id")):
+    for id in request.data.get("id"):
         gameObj               = Game.objects.get(id = id)
         gameBoughtObj         = GameInteraction.objects.create(user = request.user, game = gameObj, purchase_date = datetime.now(), purchase_price = gameObj.get_price())
         gameBoughtObj.save()

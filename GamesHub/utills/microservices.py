@@ -60,11 +60,11 @@ def search(request):
 # Microservice for transaction ID generator
 def transaction_id_generator():
     transaction_obj = Constants.objects.get(variable="TRANSACTION_ID")
-    transaction_id  = transaction_obj.get_value()
+    transaction_id  = int(transaction_obj.get_value())
     transaction_id  += 1
-    transaction_obj.set_value(transaction_id)
+    transaction_obj.set_value(str(transaction_id))
     transaction_obj.save()
-    return transaction_id
+    return int(transaction_id)
 
 FLASK_MAILER_API_KEY = os.getenv("FLASK_MAILER_API_KEY")
 
