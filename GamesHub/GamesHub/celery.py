@@ -11,6 +11,6 @@ app.autodiscover_tasks()
 import django
 django.setup()
 
-import utills.email_batches
+import utills.batches
 
 

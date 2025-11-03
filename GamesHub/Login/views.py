@@ -49,7 +49,8 @@ def SignUp(request):
                 httponly=True,
                 secure=True,
                 samesite='Strict',
-                max_age=7 * 24 * 60 * 60
+                max_age=7 * 24 * 60 * 60,
+                path="/user/session/"
             )
 
         if not mail_result:
@@ -74,7 +75,8 @@ def Login(request):
                 httponly=True,
                 secure=True,
                 samesite='Strict',
-                max_age=7 * 24 * 60 * 60
+                max_age=7 * 24 * 60 * 60,
+                path="/user/session/"
             )
 
             return response
@@ -136,13 +138,29 @@ def Forgot_Password(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def extendSession(request):
-    refresh   = request.COOKIES.get('Refresh_Token')
     if not refresh:
         return Response({"message":"Refresh token cookie not found"}, status=status.HTTP_400_BAD_REQUEST)
     try:
         refresh_token = RefreshToken(refresh)
-        return Response({"message":"Access Token generated successfully", "Access_Token":str(refresh_token.access_token)}, status=status.HTTP_200_OK)
+        refresh_token.blacklist()
+
+        refresh = RefreshToken.for_user(request.user)
+
+        response = Response({"message":"Access Token generated successfully", "Access_Token":str(refresh.access_token)}, status=status.HTTP_200_OK)
+
+        response.set_cookie(
+                key='Refresh_Token',
+                value=str(refresh),
+                httponly=True,
+                secure=True,
+                samesite='Strict',
+                max_age=7 * 24 * 60 * 60,
+                path="/user/session/"
+            )
+
+        return response
     except:
         return Response({"message":"Refresh token incorrect or expired"}, status=status.HTTP_401_UNAUTHORIZED)
     
@@ -157,7 +175,7 @@ def logout(request):
         refresh_token = RefreshToken(refresh)
         refresh_token.blacklist()
         response = Response({"message":f"user {user_name} logged out successfully!"}, status=status.HTTP_205_RESET_CONTENT)
-        response.delete_cookie('Refresh_Token')
+        response.delete_cookie('Refresh_Token', path='/user/session/')
 
         return response
     except Exception as e:

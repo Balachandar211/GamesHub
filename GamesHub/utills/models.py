@@ -9,3 +9,7 @@ class Constants(models.Model):
     
     def get_value(self):
         return self.value
+
+    def __str__(self):
+        return self.variable
+    

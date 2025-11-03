@@ -18,11 +18,11 @@ class AccessRestrictionMiddleware(MiddlewareMixin):
     def process_request(self, request):
         try:
             cookie = request.COOKIES.get('Refresh_Token')
-            if cookie == None:
+            if not (request.user.is_superuser or request.user.is_staff) and cookie == None:
                 if 'HTTP_AUTHORIZATION' in request.META:
                     del request.META['HTTP_AUTHORIZATION']
                 request.user = AnonymousUser()
                 return None
-        except:
+        except Exception as e:
             pass
         
