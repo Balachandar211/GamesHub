@@ -13,3 +13,6 @@ class Constants(models.Model):
     def __str__(self):
         return self.variable
     
+class BlacklistedAccessToken(models.Model):
+    access_token         = models.CharField(max_length=1024)
+    blacklisted_time      = models.IntegerField()

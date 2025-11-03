@@ -12,6 +12,7 @@ from django.contrib.auth.hashers import check_password
 from utills.microservices import mail_service
 import requests
 import os
+from utills.models import BlacklistedAccessToken
 User = get_user_model()
 
 EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
@@ -173,6 +174,8 @@ def logout(request):
     try:
         user_name     = request.user.get_username()
         refresh_token = RefreshToken(refresh)
+        blacklist_access = BlacklistedAccessToken(access_token = request.META['HTTP_AUTHORIZATION'].split(' ')[1], blacklisted_time =  time.time())
+        blacklist_access.save()
         refresh_token.blacklist()
         response = Response({"message":f"user {user_name} logged out successfully!"}, status=status.HTTP_205_RESET_CONTENT)
         response.delete_cookie('Refresh_Token', path='/user/session/')
