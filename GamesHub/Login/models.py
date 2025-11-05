@@ -8,6 +8,7 @@ class AppUser(AbstractUser):
     phoneNumber    = models.CharField(max_length=15, null=True, default=None)
     is_active      = models.BooleanField(default=True)  
 
+
     def get_email(self):
         return self.email
     

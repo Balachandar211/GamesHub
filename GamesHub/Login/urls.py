@@ -4,7 +4,7 @@ from .views import SignUp, Login, Forgot_Password, extendSession, logout, delete
 
 urlpatterns = [
     path('signup', SignUp),
-    path('login', Login),
+    path('session/login', Login),
     path('forgot_password', Forgot_Password),
     path('session/refresh', extendSession),
     path('session/logout', logout),

@@ -15,4 +15,4 @@ class Constants(models.Model):
     
 class BlacklistedAccessToken(models.Model):
     access_token         = models.CharField(max_length=1024)
-    blacklisted_time      = models.IntegerField()
+    blacklisted_time      = models.DateTimeField()

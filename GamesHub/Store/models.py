@@ -22,6 +22,12 @@ class Game(models.Model):
     def __str__(self):
         return self.name
     
+    def get_discount(self):
+        return self.discount
+    
+    def get_actual_price(self):
+        return (self.price - (self.price * (self.discount)/100))
+
     def get_price(self):
         return (self.price - (self.price * (self.discount)/100)) + (self.price - (self.price * (self.discount)/100))*0.18
     

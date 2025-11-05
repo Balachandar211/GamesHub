@@ -98,7 +98,7 @@ def mail_service(Subject, message, recepients):
             }
 
             response = requests.post(url, json=payload, headers=headers)
-
+            
             if response.status_code == 200:
                 return True, "Email sent successfully"
             else:
