@@ -11,8 +11,8 @@ User = get_user_model()
 
 @api_view(["GET"])
 def Home(request):
-    greeting, paginator, gamesSerial, profile_picture = search(request)
-    return Response({"message": f"Hi {greeting}", 'next': paginator.get_next_link(), 'previous': paginator.get_previous_link(), "Catalogue":gamesSerial.data,"Profile_Picture":profile_picture}, status=status.HTTP_200_OK)
+    greeting, paginator, gamesSerial = search(request)
+    return Response({"message": f"Hi {greeting}", 'next': paginator.get_next_link(), 'previous': paginator.get_previous_link(), "Catalogue":gamesSerial.data}, status=status.HTTP_200_OK)
 
 
 @api_view(["GET", "POST", "PATCH", "DELETE"])
@@ -132,4 +132,3 @@ def WishlistUser(request):
             return Response({"message":f"wishlist for user {request.user.get_username()} deleted successfully!"}, status=status.HTTP_204_NO_CONTENT)
         except:
             return Response({"message":f"No wishlist exist for user {request.user.get_username()}"}, status=status.HTTP_400_BAD_REQUEST)
-

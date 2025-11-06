@@ -3,6 +3,7 @@ from django.contrib.auth.hashers import make_password
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from utills.storage_supabase import upload_file_to_supabase
+from rest_framework.exceptions import ValidationError
 User = get_user_model()
 
 class userSerializer(ModelSerializer):
@@ -22,7 +23,7 @@ class userSerializer(ModelSerializer):
     def validate_profilePicture(self, profilePicture):
         valid_mime_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
         if profilePicture and profilePicture.content_type not in valid_mime_types:
-            raise profilePicture("Only image files (JPEG, PNG, GIF, WEBP) are allowed.")
+            raise ValidationError("Only image files (JPEG, PNG, GIF, WEBP, JPG) are allowed.")
         if profilePicture:
             public_url = upload_file_to_supabase(profilePicture, "ProfilePicture")
             return public_url

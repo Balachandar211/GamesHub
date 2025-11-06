@@ -14,19 +14,14 @@ def requested_user(request):
             greeting = f"user {request.user.get_username()}"
     else:
         greeting = "guest user"
-    
-    try:
-        profile_picture = request.user.get_profilePicture()
-    except:
-        profile_picture = 'NA'
-    
-    return greeting, profile_picture
+        
+    return greeting
 
 # Microservice for Search
 def search(request):
     paginator = LimitOffsetPagination()
 
-    greeting, profile_picture = requested_user(request)
+    greeting = requested_user(request)
 
     filters = {}
 
@@ -49,13 +44,12 @@ def search(request):
         gameObjs = Game.objects.filter(**filters)
         paginated_games = paginator.paginate_queryset(gameObjs, request)
         gamesSerial = gamesSerializer(paginated_games, many=True)
-        return greeting, paginator, gamesSerial, profile_picture
+        return greeting, paginator, gamesSerial
     
     gameObjs    = Game.objects.all()
     paginated_games = paginator.paginate_queryset(gameObjs, request)
     gamesSerial = gamesSerializer(paginated_games, many=True)
-    return greeting, paginator, gamesSerial, profile_picture
-
+    return greeting, paginator, gamesSerial
 
 # Microservice for transaction ID generator
 def transaction_id_generator():

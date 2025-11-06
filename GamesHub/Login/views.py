@@ -1,8 +1,9 @@
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import IsAuthenticated
 from .models import OTP
 from .serializers import userSerializer
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 import random
@@ -19,6 +20,7 @@ User = get_user_model()
 EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
 
 @api_view(["POST"])
+@parser_classes([MultiPartParser])
 def SignUp(request):
     if User.objects.filter(username = request.data.get("username")).exists():
         return Response({"message": "Username already Exists"}, status=status.HTTP_400_BAD_REQUEST)
@@ -37,13 +39,24 @@ def SignUp(request):
         userObject = userObject.save()
         refresh = RefreshToken.for_user(userObject)
 
-        Subject    = 'Welcome to GamesHub!'
-        message    = f'Hi <b>{request.data.get('username')}</b> welcome to GamesHub an exclusive videogames marketplace!'
+        Subject    = f'🎮 Welcome to GamesHub, {request.data.get('username')}!'
+        message    = f'''Hi <b>{request.data.get('username')},</b><br><br>
+                         Welcome to GamesHub — where epic adventures, legendary loot, and exclusive titles await!<br><br>
+                        🕹️ Whether you're into pixel-perfect indies or blockbuster AAA hits,
+                        we've got something for every kind of gamer.<br><br>
+                        🔥 Discover trending releases, hidden gems, and curated collections tailored to your playstyle.<br><br>
+                        🎁 Plus, enjoy early access deals, wishlist alerts, and community-powered reviews — all in one sleek hub.
+                        Your next favorite game is just a click away. Let the quest begin!<br><br>
+                        <b>Game on,<br> — The GamesHub Team</b>'''
+        
         recepients = [request.data.get('email')]
 
         mail_result, message_response = mail_service(Subject, message, recepients)
 
-        response = Response({"message": f"User {request.data.get('username')} added successfully", "Access_Token":str(refresh.access_token)}, status=status.HTTP_201_CREATED)
+        if not mail_result:
+            Response({"error":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        response = Response({"message": f"User {request.data.get('username')} added successfully", "username":userObject.get_username(), "profile_picture":userObject.get_profilePicture(), "Access_Token":str(refresh.access_token)}, status=status.HTTP_201_CREATED)
     
         response.set_cookie(
                 key='Refresh_Token',
@@ -51,13 +64,10 @@ def SignUp(request):
                 httponly=True,
                 secure=True,
                 samesite='Strict',
-                max_age=7 * 24 * 60 * 60,
+                max_age= 24 * 60 * 60,
                 path="/user/session/"
             )
-
-        if not mail_result:
-            Response({"error":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+        
         return response
     
     return Response({"error":userObject.errors}, status=status.HTTP_400_BAD_REQUEST)
@@ -69,7 +79,7 @@ def Login(request):
         if userObj.check_password(request.data.get("password")):
             refresh = RefreshToken.for_user(userObj)
 
-            response = Response({"message": f"User {userObj.get_username()} logged in", "Access_Token":str(refresh.access_token)}, status=status.HTTP_200_OK)
+            response = Response({"message": f"User {userObj.get_username()} logged in", "username":userObj.get_username(), "profile_picture":userObj.get_profilePicture(), "Access_Token":str(refresh.access_token)}, status=status.HTTP_200_OK)
 
             response.set_cookie(
                 key='Refresh_Token',
@@ -77,7 +87,7 @@ def Login(request):
                 httponly=True,
                 secure=True,
                 samesite='Strict',
-                max_age=7 * 24 * 60 * 60,
+                max_age= 24 * 60 * 60,
                 path="/user/session/"
             )
 
@@ -86,7 +96,7 @@ def Login(request):
             return Response({"message":f"Incorrect password for user {userObj.get_username()}"}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         print(e)
-        return Response({"message":"userName not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"message":"username not found"}, status=status.HTTP_404_NOT_FOUND)
     
 
 @api_view(["POST"])
@@ -142,10 +152,14 @@ def Forgot_Password(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def extendSession(request):
+    refresh   = request.COOKIES.get('Refresh_Token')
     if not refresh:
         return Response({"message":"Refresh token cookie not found"}, status=status.HTTP_400_BAD_REQUEST)
     try:
-        refresh_token = RefreshToken(refresh)
+        refresh_token    = RefreshToken(refresh)
+        blacklist_access = BlacklistedAccessToken(access_token = request.META['HTTP_AUTHORIZATION'].split(' ')[1], blacklisted_time =  timezone.now())
+        blacklist_access.save()
+
         refresh_token.blacklist()
 
         refresh = RefreshToken.for_user(request.user)
@@ -158,7 +172,7 @@ def extendSession(request):
                 httponly=True,
                 secure=True,
                 samesite='Strict',
-                max_age=7 * 24 * 60 * 60,
+                max_age= 24 * 60 * 60,
                 path="/user/session/"
             )
 
@@ -275,8 +289,6 @@ def delete_user(request):
             except Exception as e:
                 return Response({"message": "Incorrect username entered or OTP not generated for this user"}, status=status.HTTP_400_BAD_REQUEST)
         
-
-
 
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated])

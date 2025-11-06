@@ -1,4 +1,6 @@
 from django.db import models
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 class Constants(models.Model):
     variable   = models.CharField(max_length=32)
@@ -15,4 +17,4 @@ class Constants(models.Model):
     
 class BlacklistedAccessToken(models.Model):
     access_token         = models.CharField(max_length=1024)
-    blacklisted_time      = models.DateTimeField()
+    blacklisted_time     = models.DateTimeField()

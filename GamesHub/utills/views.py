@@ -43,4 +43,3 @@ def supabase_awake_delete(request):
     delete_from_supabase(f"Internal/{obj}")
 
     return HttpResponse("Delete successfull")
-

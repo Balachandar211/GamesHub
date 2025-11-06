@@ -1,5 +1,4 @@
 from django.db import models
-from Login.models import AppUser
 from Store.models import Game
 from django.contrib.auth import get_user_model
 AppUser = get_user_model()

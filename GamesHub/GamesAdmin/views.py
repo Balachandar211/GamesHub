@@ -13,10 +13,8 @@ User = get_user_model()
 @permission_classes([IsAdminOrReadOnly])
 def gamesAdmin(request):
     if request.method == "GET":
-        greeting, paginator, gamesSerial, profile_picture = search(request)
-        return Response({"message": f"Hi {greeting}", 'next': paginator.get_next_link(), 'previous': paginator.get_previous_link(), "Catalogue":gamesSerial.data,"Profile_Picture":profile_picture}, status=status.HTTP_200_OK)
-    
-
+        greeting, paginator, gamesSerial = search(request)
+        return Response({"message": f"Hi {greeting}", 'next': paginator.get_next_link(), 'previous': paginator.get_previous_link(), "Catalogue":gamesSerial.data}, status=status.HTTP_200_OK)
     
     if request.method == "POST":
         if isinstance(request.data, dict):
@@ -80,7 +78,6 @@ def gamesAdmin(request):
                 
             return Response({"message":f"game(s) updated successfully!", "Success_Status":success_dict, "Error_Status":error_dict}, status=status.HTTP_201_CREATED)
         
-    
     if request.method == "DELETE":
         success_dict = {}
         failure_dict = {}
@@ -112,4 +109,3 @@ def gamesAdmin(request):
             return Response({"error":f"use id or exact name as list of values"}, status=status.HTTP_400_BAD_REQUEST)
         
         return Response({"error":f"use id or exact name to request"}, status=status.HTTP_400_BAD_REQUEST)
-
