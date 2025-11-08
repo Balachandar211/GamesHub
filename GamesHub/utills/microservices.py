@@ -4,6 +4,7 @@ from Store.serializers import gamesSerializer
 from .models import Constants
 import requests
 import os
+from django.core.cache import cache
 
 # Microservice to get User and User Type
 def requested_user(request):    
@@ -22,31 +23,42 @@ def search(request):
     paginator = LimitOffsetPagination()
 
     greeting = requested_user(request)
-
-    filters = {}
-
-    if request.query_params.get('name') is not None:
-        filters["name__icontains"] = request.query_params.get('name')
-    if request.query_params.get('publishedDate') is not None:
-        filters["publishedDate__lte"] = request.query_params.get('publishedDate')
-    if request.query_params.get('price') is not None:
-        filters["price__lte"] = request.query_params.get('price')
-    if request.query_params.get('developer') is not None:
-        filters["developer__icontains"] = request.query_params.get('developer')
-    if request.query_params.get('discount') is not None:
-        filters["discount__lte"] = request.query_params.get('discount')
-    if len(request.GET.getlist('platforms')) != 0:
-        filters["platforms__in"] = request.GET.getlist('platforms')
-    if len(request.GET.getlist('genre')) != 0:
-        filters["genre__in"] = request.GET.getlist('genre')
-
-    if filters:
-        gameObjs = Game.objects.filter(**filters)
-        paginated_games = paginator.paginate_queryset(gameObjs, request)
-        gamesSerial = gamesSerializer(paginated_games, many=True)
-        return greeting, paginator, gamesSerial
     
-    gameObjs    = Game.objects.all()
+    cached_vals = cache.get("CACHED_GAMES")
+    
+    if not request.GET and cached_vals:
+        gameObjs = cached_vals
+    elif not request.GET and not cached_vals:
+        gameObjs = Game.objects.all()
+        cache.set("CACHED_GAMES", gameObjs, timeout=600)
+    else:
+        filters = {}
+
+        if request.query_params.get('name') is not None:
+            filters["name__icontains"] = request.query_params.get('name')
+        if request.query_params.get('publishedDate') is not None:
+            filters["publishedDate__lte"] = request.query_params.get('publishedDate')
+        if request.query_params.get('price') is not None:
+            filters["price__lte"] = request.query_params.get('price')
+        if request.query_params.get('developer') is not None:
+            filters["developer__icontains"] = request.query_params.get('developer')
+        if request.query_params.get('discount') is not None:
+            filters["discount__gte"] = request.query_params.get('discount')
+        if request.query_params.get('rating') is not None:
+            filters["rating__gte"] = request.query_params.get('rating')
+        if len(request.GET.getlist('platforms')) != 0:
+            filters["platforms__in"] = request.GET.getlist('platforms')
+        if len(request.GET.getlist('genre')) != 0:
+            filters["genre__in"] = request.GET.getlist('genre')
+
+        cached_vals = cache.get(tuple(filters.keys()))
+
+        if cached_vals:
+            gameObjs = cached_vals
+        else:
+            gameObjs = Game.objects.filter(**filters)
+            cache.set(tuple(filters.keys()), gameObjs, timeout=600)
+
     paginated_games = paginator.paginate_queryset(gameObjs, request)
     gamesSerial = gamesSerializer(paginated_games, many=True)
     return greeting, paginator, gamesSerial

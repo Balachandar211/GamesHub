@@ -15,6 +15,11 @@ class Game(models.Model):
     platforms     = models.CharField(max_length=256)
     genre         = models.CharField(max_length=256)
     discount      = models.FloatField(default=0, validators=[MinValueValidator(0.0), MaxValueValidator(100)])
+    rating        = models.FloatField(default=0)
+    no_of_rating  = models.FloatField(default=0)
+
+    def get_id(self):
+        return self.id
 
     def get_name(self):
         return self.name
@@ -30,6 +35,15 @@ class Game(models.Model):
 
     def get_price(self):
         return (self.price - (self.price * (self.discount)/100)) + (self.price - (self.price * (self.discount)/100))*0.18
+    
+    def get_rating_detail(self):
+        return self.rating, self.no_of_rating
+    
+    def set_rating_detail(self, rating, no_of_rating):
+        self.rating       = rating
+        self.no_of_rating = no_of_rating
+    
+
     
 
 class Cart(models.Model):

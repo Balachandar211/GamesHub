@@ -1,0 +1,441 @@
+openapi: 3.0.3
+info:
+  title: GameHub API
+  version: 1.0.0
+  description: Backend API for GamesHub store
+paths:
+  /:
+    get:
+      operationId: root_retrieve
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/schema/:
+    get:
+      operationId: api_schema_retrieve
+      description: |-
+        OpenApi3 schema for this API. Format can be selected via content negotiation.
+
+        - YAML: application/vnd.oai.openapi
+        - JSON: application/vnd.oai.openapi+json
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - json
+          - yaml
+      - in: query
+        name: lang
+        schema:
+          type: string
+          enum:
+          - af
+          - ar
+          - ar-dz
+          - ast
+          - az
+          - be
+          - bg
+          - bn
+          - br
+          - bs
+          - ca
+          - ckb
+          - cs
+          - cy
+          - da
+          - de
+          - dsb
+          - el
+          - en
+          - en-au
+          - en-gb
+          - eo
+          - es
+          - es-ar
+          - es-co
+          - es-mx
+          - es-ni
+          - es-ve
+          - et
+          - eu
+          - fa
+          - fi
+          - fr
+          - fy
+          - ga
+          - gd
+          - gl
+          - he
+          - hi
+          - hr
+          - hsb
+          - hu
+          - hy
+          - ia
+          - id
+          - ig
+          - io
+          - is
+          - it
+          - ja
+          - ka
+          - kab
+          - kk
+          - km
+          - kn
+          - ko
+          - ky
+          - lb
+          - lt
+          - lv
+          - mk
+          - ml
+          - mn
+          - mr
+          - ms
+          - my
+          - nb
+          - ne
+          - nl
+          - nn
+          - os
+          - pa
+          - pl
+          - pt
+          - pt-br
+          - ro
+          - ru
+          - sk
+          - sl
+          - sq
+          - sr
+          - sr-latn
+          - sv
+          - sw
+          - ta
+          - te
+          - tg
+          - th
+          - tk
+          - tr
+          - tt
+          - udm
+          - ug
+          - uk
+          - ur
+          - uz
+          - vi
+          - zh-hans
+          - zh-hant
+      tags:
+      - api
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/vnd.oai.openapi:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/yaml:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/vnd.oai.openapi+json:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /game/{id}:
+    get:
+      operationId: game_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - game
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /game/buy:
+    post:
+      operationId: game_buy_create
+      tags:
+      - game
+      responses:
+        '200':
+          description: No response body
+  /game/purchase:
+    post:
+      operationId: game_purchase_create
+      tags:
+      - game
+      responses:
+        '200':
+          description: No response body
+  /gamesadmin/manage:
+    get:
+      operationId: gamesadmin_manage_retrieve
+      tags:
+      - gamesadmin
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: gamesadmin_manage_create
+      tags:
+      - gamesadmin
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: gamesadmin_manage_partial_update
+      tags:
+      - gamesadmin
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: gamesadmin_manage_destroy
+      tags:
+      - gamesadmin
+      responses:
+        '204':
+          description: No response body
+  /healthz:
+    get:
+      operationId: healthz_retrieve
+      tags:
+      - healthz
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /healthz/:
+    get:
+      operationId: healthz_retrieve_2
+      tags:
+      - healthz
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /not_found:
+    get:
+      operationId: not_found_retrieve
+      tags:
+      - not_found
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /store/cart:
+    get:
+      operationId: store_cart_retrieve
+      tags:
+      - store
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: store_cart_create
+      tags:
+      - store
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: store_cart_partial_update
+      tags:
+      - store
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: store_cart_destroy
+      tags:
+      - store
+      responses:
+        '204':
+          description: No response body
+  /store/home:
+    get:
+      operationId: store_home_retrieve
+      tags:
+      - store
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /store/wishlist:
+    get:
+      operationId: store_wishlist_retrieve
+      tags:
+      - store
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: store_wishlist_create
+      tags:
+      - store
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: store_wishlist_partial_update
+      tags:
+      - store
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: store_wishlist_destroy
+      tags:
+      - store
+      responses:
+        '204':
+          description: No response body
+  /user/delete_user:
+    delete:
+      operationId: user_delete_user_destroy
+      tags:
+      - user
+      responses:
+        '204':
+          description: No response body
+  /user/forgot_password:
+    post:
+      operationId: user_forgot_password_create
+      tags:
+      - user
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /user/recover_user:
+    post:
+      operationId: user_recover_user_create
+      tags:
+      - user
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /user/session/login:
+    post:
+      operationId: user_session_login_create
+      description: "\n                Authenticates a user and returns a JWT access
+        token.\n\n                - Sets `Refresh_Token` as a secure HTTP-only cookie\n
+        \               - Returns profile metadata on success\n                "
+      summary: Login to GamesHub
+      tags:
+      - user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: {}
+            examples:
+              LoginRequest:
+                value:
+                  username: Batman
+                  password: hunter2
+                summary: Login request
+      security:
+      - {}
+      responses:
+        '200':
+          description: 'Login successful, example = {"message": "User SampleUser logged
+            in", "username":SampleUser, "profile_picture":url, "Access_Token":hgavhvsgga....}'
+        '400':
+          description: Incorrect password example, = {"message":"Incorrect password
+            for user SampleUser"}
+        '404':
+          description: Username not found example, = {"message":"username not found"}
+  /user/session/logout:
+    post:
+      operationId: user_session_logout_create
+      tags:
+      - user
+      responses:
+        '200':
+          description: No response body
+  /user/session/refresh:
+    post:
+      operationId: user_session_refresh_create
+      tags:
+      - user
+      responses:
+        '200':
+          description: No response body
+  /user/signup:
+    post:
+      operationId: user_signup_create
+      description: "\n                Creates a new user account with profile picture,
+        email validation, and welcome mailer.\n\n                - Validates email
+        via AbstractAPI\n                - Sends branded welcome email on success\n
+        \               - Returns JWT access token and sets refresh token as secure
+        cookie\n                "
+      summary: Register a new GamesHub user
+      tags:
+      - user
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: {}
+            examples:
+              SuccessfulSignupRequest:
+                value:
+                  username: Batman
+                  password: hunter2
+                  email: batman@example.com
+                  first_name: Bruce
+                  last_name: Wayne
+                  phoneNumber: '+911234567890'
+                  profilePicture: file
+                summary: Successful signup request
+      security:
+      - {}
+      responses:
+        '201':
+          description: 'User added successfully, example={"message": "User SampleUser
+            added successfully", "username":SampleUser, "profile_picture":url, "Access_Token":hgavhvsgga....}'
+        '400':
+          description: 'Incorrect password, example=[{"message": "Username already
+            Exists"}, {"error":"Incorrect email ID provided"}, {"error":{"field":"error"}}]'
+        '500':
+          description: Mailer reputation API failed, {"error":"Mailer job failed!"}
+  /user/update_user:
+    patch:
+      operationId: user_update_user_partial_update
+      tags:
+      - user
+      responses:
+        '200':
+          description: No response body
+components: {}

@@ -5,9 +5,10 @@ from rest_framework import status
 from Store.models import Game
 from Store.serializers import gamesSerializerSimplified, gamesSerializer
 from django.urls import reverse
-from utills.microservices import requested_user, transaction_id_generator
+from utills.microservices import transaction_id_generator
 from .models import GameInteraction
 from datetime import datetime
+from django.core.cache import cache
 
 
 @api_view(["POST"])
@@ -46,12 +47,16 @@ def buy(request):
 @api_view(["GET"])
 def games_detail(request, pk):
     try:
-        game           = Game.objects.get(pk = pk)
+        cached_game = cache.get(pk)
+        if cached_game:
+            game = cached_game
+        else:
+           game  = Game.objects.get(pk = pk) 
+           cache.set(pk, game, timeout=600)
+
         gameSerialData = gamesSerializer(game)
         gameData       = gameSerialData.data
     except:
         gameData       = {}
 
-    greeting, profile_picture = requested_user(request)
-
-    return Response({"message": f"Hi {greeting}", "game":gameData, "Profile_Picture":profile_picture}, status=status.HTTP_200_OK)
+    return Response({"message": f"game detail for pk {pk}", "game":gameData}, status=status.HTTP_200_OK)

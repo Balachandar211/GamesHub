@@ -28,20 +28,6 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY_GAMESHUB')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG_FLAG').lower() == 'true'
 
-ALLOWED_HOSTS = []
-
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'Login.auth.LenientJWTAuthentication', 
-    ],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
-    'PAGE_SIZE': 10 ,
-    'DEFAULT_PARSER_CLASSES': [
-        'rest_framework.parsers.JSONParser',
-    ]
-}
-
-AUTH_USER_MODEL = 'Login.AppUser'
 # Application definition
 
 INSTALLED_APPS = [
@@ -59,9 +45,40 @@ INSTALLED_APPS = [
     'Login',
     'Store',
     'GamesBuzz',
-    'utills'
+    'utills',
+    'drf_spectacular'
 
 ]
+
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'Login.auth.LenientJWTAuthentication', 
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
+    'PAGE_SIZE': 10 ,
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+    ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.AnonRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'user': '2/second',
+        'anon': '2/second',
+    },
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'GameHub API',
+    'DESCRIPTION': 'Backend API for GamesHub store',
+    'VERSION': '1.0.0',
+}
+
+AUTH_USER_MODEL = 'Login.AppUser'
+
 
 ALLOWED_HOSTS = ["gameshub-test.onrender.com", "localhost"]
 
@@ -100,6 +117,16 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'GamesHub.wsgi.application'
 
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': os.getenv("REDIS_CACHE"),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'SSL': True,
+        }
+    }
+}
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases

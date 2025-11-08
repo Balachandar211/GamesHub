@@ -21,3 +21,6 @@ class GameInteraction(models.Model):
 
     class Meta:
         unique_together = ('user', 'game') 
+
+    def __str__(self):
+        return f"{self.user} bought {self.game}"

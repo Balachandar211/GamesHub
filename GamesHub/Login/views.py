@@ -15,10 +15,12 @@ import requests
 import os
 from utills.models import BlacklistedAccessToken
 from django.utils import timezone
+from .documentation import signup_schema, login_schema
 User = get_user_model()
 
 EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
 
+@signup_schema
 @api_view(["POST"])
 @parser_classes([MultiPartParser])
 def SignUp(request):
@@ -39,13 +41,13 @@ def SignUp(request):
         userObject = userObject.save()
         refresh = RefreshToken.for_user(userObject)
 
-        Subject    = f'🎮 Welcome to GamesHub, {request.data.get('username')}!'
+        Subject    = f'&#127918; Welcome to GamesHub, {request.data.get('username')}!'
         message    = f'''Hi <b>{request.data.get('username')},</b><br><br>
                          Welcome to GamesHub — where epic adventures, legendary loot, and exclusive titles await!<br><br>
-                        🕹️ Whether you're into pixel-perfect indies or blockbuster AAA hits,
+                        &#128377; Whether you're into pixel-perfect indies or blockbuster AAA hits,
                         we've got something for every kind of gamer.<br><br>
-                        🔥 Discover trending releases, hidden gems, and curated collections tailored to your playstyle.<br><br>
-                        🎁 Plus, enjoy early access deals, wishlist alerts, and community-powered reviews — all in one sleek hub.
+                        &#128293; Discover trending releases, hidden gems, and curated collections tailored to your playstyle.<br><br>
+                        &#127873; Plus, enjoy early access deals, wishlist alerts, and community-powered reviews — all in one sleek hub.
                         Your next favorite game is just a click away. Let the quest begin!<br><br>
                         <b>Game on,<br> — The GamesHub Team</b>'''
         
@@ -72,6 +74,7 @@ def SignUp(request):
     
     return Response({"error":userObject.errors}, status=status.HTTP_400_BAD_REQUEST)
 
+@login_schema
 @api_view(["POST"])
 def Login(request):
     try:
