@@ -14,14 +14,14 @@ class gamesSerializerSimplified(ModelSerializer):
 
     class Meta:
         model  = Game
-        fields = ('name', 'developer', 'price')
+        fields = ('id', 'name', 'developer', 'price')
     
     def get_price(self, obj):
-        return obj.get_price()
+        return obj.get_actual_price()
 
 class cartSerializer(ModelSerializer):
     user = serializers.SerializerMethodField()
-    games = serializers.SerializerMethodField()
+    games = gamesSerializerSimplified(many=True)
 
     class Meta:
         model = Cart
@@ -30,12 +30,10 @@ class cartSerializer(ModelSerializer):
     def get_user(self, obj):
         return obj.user.get_username()
 
-    def get_games(self, obj):
-        return [game.get_name() for game in obj.games.all()]
     
 class wishlistSerializer(ModelSerializer):
     user = serializers.SerializerMethodField()
-    games = serializers.SerializerMethodField()
+    games = gamesSerializerSimplified(many=True)
 
     class Meta:
         model = Wishlist
@@ -43,6 +41,3 @@ class wishlistSerializer(ModelSerializer):
 
     def get_user(self, obj):
         return obj.user.get_username()
-
-    def get_games(self, obj):
-        return [game.get_name() for game in obj.games.all()]

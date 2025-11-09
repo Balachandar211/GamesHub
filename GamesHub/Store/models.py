@@ -31,10 +31,10 @@ class Game(models.Model):
         return self.discount
     
     def get_actual_price(self):
-        return (self.price - (self.price * (self.discount)/100))
+        return round(((self.price - (self.price * (self.discount)/100))), 2)
 
     def get_price(self):
-        return (self.price - (self.price * (self.discount)/100)) + (self.price - (self.price * (self.discount)/100))*0.18
+        return round(((self.price - (self.price * (self.discount)/100)) + (self.price - (self.price * (self.discount)/100))*0.18), 2)
     
     def get_rating_detail(self):
         return self.rating, self.no_of_rating
@@ -42,7 +42,8 @@ class Game(models.Model):
     def set_rating_detail(self, rating, no_of_rating):
         self.rating       = rating
         self.no_of_rating = no_of_rating
-    
+
+
 
 class Cart(models.Model):
     user          = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)

@@ -27,10 +27,18 @@ cart_get_schema = extend_schema(
                 "Cart": {
                     "user": "ShinjoBlal",
                     "games": [
-                        "Virtua Fighter 5 R.E.V.O. World Stage",
-                        "Simon the Sorcerer Origins",
-                        "L.A. Noire",
-                        "Mortal Kombat: Legacy Kollection"
+                        {
+                            "id": 4,
+                            "name": "Virtua Fighter 5 R.E.V.O. World Stage",
+                            "developer": "Sega",
+                            "price": 2890.0
+                        },
+                        {
+                            "id": 7,
+                            "name": "Simon the Sorcerer Origins",
+                            "developer": "Smallthing Studios",
+                            "price": 2790.0
+                        }
                     ]
                 }
             },
@@ -242,16 +250,24 @@ whishlist_get_schema = extend_schema(
         OpenApiExample(
             name="Wishlist with games",
             value={
-                "message": "Wishlist for user ShinjoBlal",
-                "Wishlist": {
-                    "user": "ShinjoBlal",
-                    "games": [
-                        "Virtua Fighter 5 R.E.V.O. World Stage",
-                        "Simon the Sorcerer Origins",
-                        "L.A. Noire",
-                        "Mortal Kombat: Legacy Kollection"
-                    ]
-                }
+                    "message": "Wishlist for user ShinjoBlal",
+                    "Wishlist": {
+                        "user": "ShinjoBlal",
+                        "games": [
+                            {
+                                "id": 27,
+                                "name": "Assassin’s Creed Syndicate",
+                                "developer": "Ubisoft",
+                                "price": 1990.0
+                            },
+                            {
+                                "id": 45,
+                                "name": "Hogwarts Legacy",
+                                "developer": "Avalanche Software",
+                                "price": 3499.0
+                            }
+                        ]
+                    }
             },
             response_only=True,
             status_codes=["200"]

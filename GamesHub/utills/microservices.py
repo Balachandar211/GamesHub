@@ -5,6 +5,7 @@ from .models import Constants
 import requests
 import os
 from django.core.cache import cache
+from django.db.models import Q
 
 # Microservice to get User and User Type
 def requested_user(request):    
@@ -32,32 +33,35 @@ def search(request):
         gameObjs = Game.objects.all()
         cache.set("CACHED_GAMES", gameObjs, timeout=600)
     else:
-        filters = {}
+        filters = Q()
 
         if request.query_params.get('name') is not None:
-            filters["name__icontains"] = request.query_params.get('name')
+            filters &= Q(name__icontains = request.query_params.get('name'))
         if request.query_params.get('publishedDate') is not None:
-            filters["publishedDate__lte"] = request.query_params.get('publishedDate')
+            filters &= Q(publishedDate__lte = request.query_params.get('publishedDate'))
         if request.query_params.get('price') is not None:
-            filters["price__lte"] = request.query_params.get('price')
+            filters &= Q(price__lte = request.query_params.get('price'))
         if request.query_params.get('developer') is not None:
-            filters["developer__icontains"] = request.query_params.get('developer')
+            filters &= Q(developer__icontains = request.query_params.get('developer'))
         if request.query_params.get('discount') is not None:
-            filters["discount__gte"] = request.query_params.get('discount')
+            filters &= Q(discount__gte= request.query_params.get('discount'))
         if request.query_params.get('rating') is not None:
-            filters["rating__gte"] = request.query_params.get('rating')
+            filters &= Q(rating__gte = request.query_params.get('rating'))
         if len(request.GET.getlist('platforms')) != 0:
-            filters["platforms__in"] = request.GET.getlist('platforms')
+            for p in request.GET.getlist('platforms'):
+                filters &= Q(platforms__icontains=p)
         if len(request.GET.getlist('genre')) != 0:
-            filters["genre__in"] = request.GET.getlist('genre')
+            for g in request.GET.getlist('genre'):
+                filters &= Q(genre__icontains=g)
 
-        cached_vals = cache.get(tuple(filters.keys()))
+        query_params = request.GET.dict()
+        cached_vals = cache.get(tuple(query_params.values()))
 
         if cached_vals:
             gameObjs = cached_vals
         else:
-            gameObjs = Game.objects.filter(**filters)
-            cache.set(tuple(filters.keys()), gameObjs, timeout=600)
+            gameObjs = Game.objects.filter(filters)
+            cache.set(tuple(query_params.values()), gameObjs, timeout=600)
 
     paginated_games = paginator.paginate_queryset(gameObjs, request)
     gamesSerial = gamesSerializer(paginated_games, many=True)
