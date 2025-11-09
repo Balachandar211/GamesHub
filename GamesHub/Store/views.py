@@ -6,6 +6,7 @@ from .models import Game, Cart, Wishlist
 from .serializers import cartSerializer, wishlistSerializer
 from django.contrib.auth import get_user_model
 from utills.microservices import search
+from .documentation import cart_delete_schema, cart_get_schema, cart_patch_schema, cart_post_schema, whishlist_delete_schema, whishlist_get_schema, whishlist_patch_schema, whishlist_post_schema
 User = get_user_model()
 
 
@@ -15,6 +16,10 @@ def Home(request):
     return Response({"message": f"Hi {greeting}", 'next': paginator.get_next_link(), 'previous': paginator.get_previous_link(), "Catalogue":gamesSerial.data}, status=status.HTTP_200_OK)
 
 
+@cart_post_schema
+@cart_patch_schema
+@cart_get_schema
+@cart_delete_schema
 @api_view(["GET", "POST", "PATCH", "DELETE"])
 @permission_classes([IsAuthenticated])
 def userCart(request):
@@ -74,6 +79,12 @@ def userCart(request):
         except:
             return Response({"message":f"No cart exist for user {request.user.get_username()}"}, status=status.HTTP_400_BAD_REQUEST)
 
+
+
+@whishlist_post_schema
+@whishlist_patch_schema
+@whishlist_get_schema
+@whishlist_delete_schema
 @api_view(["GET", "POST", "PATCH", "DELETE"])
 @permission_classes([IsAuthenticated])
 def WishlistUser(request): 

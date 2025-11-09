@@ -15,7 +15,7 @@ import requests
 import os
 from utills.models import BlacklistedAccessToken
 from django.utils import timezone
-from .documentation import signup_schema, login_schema
+from .documentation import signup_schema, login_schema, extend_session_schema, update_user_schema, logout_session_schema, recover_user_schema, delete_user_schema, forgot_password_schema
 User = get_user_model()
 
 EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
@@ -25,7 +25,7 @@ EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
 @parser_classes([MultiPartParser])
 def SignUp(request):
     if User.objects.filter(username = request.data.get("username")).exists():
-        return Response({"message": "Username already Exists"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Username already Exists"}, status=status.HTTP_400_BAD_REQUEST)
 
     # API to check if email ID provided is valid
     email_check_response = requests.get(f"https://emailreputation.abstractapi.com/v1/?api_key={EMAIL_CHECKER_API_KEY}&email={request.data.get('email')}")
@@ -41,7 +41,7 @@ def SignUp(request):
         userObject = userObject.save()
         refresh = RefreshToken.for_user(userObject)
 
-        Subject    = f'&#127918; Welcome to GamesHub, {request.data.get('username')}!'
+        Subject    = f'Welcome to GamesHub, {request.data.get('username')}!'
         message    = f'''Hi <b>{request.data.get('username')},</b><br><br>
                          Welcome to GamesHub — where epic adventures, legendary loot, and exclusive titles await!<br><br>
                         &#128377; Whether you're into pixel-perfect indies or blockbuster AAA hits,
@@ -101,7 +101,7 @@ def Login(request):
         print(e)
         return Response({"message":"username not found"}, status=status.HTTP_404_NOT_FOUND)
     
-
+@forgot_password_schema
 @api_view(["POST"])
 def Forgot_Password(request):
     if "OTP" in request.data:
@@ -152,6 +152,7 @@ def Forgot_Password(request):
             return Response({"message":f"Incorrect Username {request.data.get("username")}"}, status=status.HTTP_400_BAD_REQUEST)
 
 
+@extend_session_schema
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def extendSession(request):
@@ -182,7 +183,8 @@ def extendSession(request):
         return response
     except:
         return Response({"message":"Refresh token incorrect or expired"}, status=status.HTTP_401_UNAUTHORIZED)
-    
+
+@logout_session_schema    
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def logout(request):
@@ -204,6 +206,7 @@ def logout(request):
         return Response({"message":"Refresh token incorrect or expired"}, status=status.HTTP_401_UNAUTHORIZED)
 
 
+@delete_user_schema
 @api_view(["DELETE"])
 @permission_classes([IsAuthenticated])
 def delete_user(request):
@@ -293,16 +296,26 @@ def delete_user(request):
                 return Response({"message": "Incorrect username entered or OTP not generated for this user"}, status=status.HTTP_400_BAD_REQUEST)
         
 
+@update_user_schema
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser])
 def update_user(request):
     userObj            = request.user
     if request.data.get("password") is not None:
         return Response({"error": "use forgot_password endpoint to update password"}, status=status.HTTP_400_BAD_REQUEST)
+    
     allowed_keys = ['first_name', 'last_name', 'profilePicture', 'email', 'phoneNumber']
     if not set(request.data.keys()).issubset(allowed_keys):
         unexpected = set(request.data.keys()) - set(allowed_keys)
         return Response({"error": f"unexpected keys {unexpected}"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    email_check_response = requests.get(f"https://emailreputation.abstractapi.com/v1/?api_key={EMAIL_CHECKER_API_KEY}&email={request.data.get('email')}")
+    
+    email_check_response = email_check_response.json()
+
+    if not email_check_response["email_deliverability"]["is_smtp_valid"]:
+        return  Response({"error":"Incorrect email ID provided"}, status=status.HTTP_400_BAD_REQUEST)
 
     userObjectSerial   = userSerializer(userObj, data = request.data, partial=True)
     if userObjectSerial.is_valid():
@@ -310,7 +323,7 @@ def update_user(request):
         return Response({"message": f"user {request.user.get_username()} updated successfully!"}, status=status.HTTP_202_ACCEPTED)
     return Response({"error": userObjectSerial.errors}, status=status.HTTP_400_BAD_REQUEST)
 
-
+@recover_user_schema
 @api_view(["POST"])
 def recover_user(request):
     if "OTP" in request.data:

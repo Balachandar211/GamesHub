@@ -21,7 +21,7 @@ def send_daily_promotional_email():
                 message += "&#x2022; <b>" + game.get_name() + "</b> - now at Rs <b>" + str(game.get_actual_price()) + "</b> (Save " + str(game.get_discount()) + "%)" + "<br>"
         
         if message != "":
-            message = f"<b>Hey {user_name} 👋</b><br><br>Your wishlist just got hotter! 🔥 Check out these epic deals:<br><br>" + message + "<br>Don’t miss out — these prices won’t last forever!<br><br>Cheers<br>Team GamesHub 🎮"
+            message = f"<b>Hey {user_name} &#128075;</b><br><br>Your wishlist just got hotter! &#128293; Check out these epic deals:<br><br>" + message + "<br>Don’t miss out — these prices won’t last forever!<br><br>Cheers<br>Team GamesHub &#127918;"
             
             result, _ = mail_service(Subject="Items from your wishlist on Sale!", message=message, recepients=[email])
             

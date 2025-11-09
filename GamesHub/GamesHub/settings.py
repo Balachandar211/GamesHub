@@ -46,8 +46,8 @@ INSTALLED_APPS = [
     'Store',
     'GamesBuzz',
     'utills',
-    'drf_spectacular'
-
+    'drf_spectacular',
+    "drf_spectacular_sidecar"
 ]
 
 
@@ -75,6 +75,8 @@ SPECTACULAR_SETTINGS = {
     'TITLE': 'GameHub API',
     'DESCRIPTION': 'Backend API for GamesHub store',
     'VERSION': '1.0.0',
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SERVE_INCLUDE_SCHEMA': True,
 }
 
 AUTH_USER_MODEL = 'Login.AppUser'
@@ -88,6 +90,7 @@ CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -97,6 +100,8 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'utills.middleware.EndpointRedirectMiddleware'
 ]
+
+WHITENOISE_USE_FINDERS = True
 
 ROOT_URLCONF = 'GamesHub.urls'
 
@@ -193,6 +198,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

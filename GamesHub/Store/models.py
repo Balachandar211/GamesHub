@@ -44,8 +44,6 @@ class Game(models.Model):
         self.no_of_rating = no_of_rating
     
 
-    
-
 class Cart(models.Model):
     user          = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
     games         = models.ManyToManyField(Game)
