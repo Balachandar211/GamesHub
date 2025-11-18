@@ -50,7 +50,7 @@ signup_schema = extend_schema(
             "required": ["username", "password", "email"]
         }},
     responses={
-        200: {
+        201: {
             'type': 'application/json',
             'properties': {
                 'message': {'type': 'string', 'description': 'User registration successfull message'},

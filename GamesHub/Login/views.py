@@ -20,6 +20,7 @@ User = get_user_model()
 
 EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
 
+
 @signup_schema
 @api_view(["POST"])
 @parser_classes([MultiPartParser])

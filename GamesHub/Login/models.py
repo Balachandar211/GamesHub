@@ -1,9 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
-
+from utills.storage_supabase import supabase
 
 class AppUser(AbstractUser):
-    profilePicture = models.CharField(null=True, default=None, blank=True)
+    profilePicture = models.URLField(null=True, default=None, blank=True)
     email          = models.EmailField()
     phoneNumber    = models.CharField(max_length=15, null=True, default=None)
     is_active      = models.BooleanField(default=True)  
@@ -13,7 +13,11 @@ class AppUser(AbstractUser):
         return self.email
     
     def get_profilePicture(self):
-        return self.profilePicture
+        if self.profilePicture is not None:
+            profilePicture_path = self.profilePicture.split("GamesHubMedia/")[1]
+            result = supabase.storage.from_("GamesHubMedia").create_signed_url(profilePicture_path, 60)
+            return result["signedURL"]
+        return None
     
     def get_password(self):
         return self.password

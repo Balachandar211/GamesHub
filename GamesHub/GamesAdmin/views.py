@@ -1,4 +1,4 @@
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.response import Response
 from rest_framework import status
 from utills.permissions import IsAdminOrReadOnly
@@ -6,11 +6,13 @@ from Store.models import Game
 from Store.serializers import gamesSerializer
 from django.contrib.auth import get_user_model
 from utills.microservices import search
+from rest_framework.parsers import MultiPartParser
 User = get_user_model()
 
 
 @api_view(["GET", "POST", "PATCH", "DELETE"])
 @permission_classes([IsAdminOrReadOnly])
+@parser_classes([MultiPartParser])
 def gamesAdmin(request):
     if request.method == "GET":
         greeting, paginator, gamesSerial = search(request)
@@ -18,10 +20,10 @@ def gamesAdmin(request):
     
     if request.method == "POST":
         if isinstance(request.data, dict):
-            if not request.data.get('name'):
-                return Response({"message": "Data without name field exist"}, status=status.HTTP_400_BAD_REQUEST)
-            if Game.objects.filter(name = request.data.get('name')).exists():
-                return Response({"message":f"game {request.data.get('name')} already present use PATCH for update"}, status=status.HTTP_400_BAD_REQUEST)
+            if not request.data.get('id'):
+                return Response({"message": "Data without id field exist"}, status=status.HTTP_400_BAD_REQUEST)
+            if Game.objects.filter(id = request.data.get('id')).exists():
+                return Response({"message":f"game with id {request.data.get('id')} already present use PATCH for update"}, status=status.HTTP_400_BAD_REQUEST)
             data = request.data
             gameObjs    = gamesSerializer(data = data)
             if gameObjs.is_valid():
@@ -32,10 +34,10 @@ def gamesAdmin(request):
             success_dict = {}
             error_dict   = {}
             for data in request.data:
-                if not data.get('name'):
-                    error_dict["Incorrect Json"] = "Entry without name field exist"
-                elif Game.objects.filter(name = data.get('name')).exists():
-                    error_dict[data.get('name')] = "Game with the name already exists use PATCH to update"
+                if not data.get('id'):
+                    error_dict["Incorrect Json"] = "Entry without id field exist"
+                elif Game.objects.filter(id = data.get('id')).exists():
+                    error_dict[data.get('id')] = "Game with the id already exists use PATCH to update"
                 else:
                     gameObjs    = gamesSerializer(data = data)
                     if gameObjs.is_valid():
@@ -48,26 +50,28 @@ def gamesAdmin(request):
     
     if request.method == "PATCH":
         if isinstance(request.data, dict):
-            gameObj     = Game.objects.get(name = request.data.get("name"))
+            if not request.data.get('id'):
+                return Response({"message": "Data without id field exist"}, status=status.HTTP_400_BAD_REQUEST)
+            gameObj     = Game.objects.get(id = request.data.get("id"))
             gamesSerial = gamesSerializer(gameObj, data = request.data, partial=True)
             if gamesSerial.is_valid():
                 gamesSerial.save()
-                return Response({"message":f"game {request.data.get("name")} updated successfully!"}, status=status.HTTP_202_ACCEPTED)
+                return Response({"message":f"game with id {request.data.get("id")} updated successfully!"}, status=status.HTTP_202_ACCEPTED)
             return Response({"message": gamesSerial.errors}, status=status.HTTP_400_BAD_REQUEST)
         else:
             success_dict = {}
             error_dict   = {}
             for data in request.data:
-                if not data.get('name'):
-                    error_dict["Incorrect Json"] = "Entry without name field exist"
-                elif Game.objects.filter(name = data.get('name')).exists():
-                    gameObj     = Game.objects.get(name = data.get("name"))
+                if not data.get('id'):
+                    error_dict["Incorrect Json"] = "Entry without id field exist"
+                elif Game.objects.filter(id = data.get('id')).exists():
+                    gameObj     = Game.objects.get(id = data.get("id"))
                     gamesSerial = gamesSerializer(gameObj, data = data, partial=True)
                     if gamesSerial.is_valid():
                         gamesSerial.save()
-                        success_dict[data.get('name')] = f"game {data.get("name")} updated successfully!"
+                        success_dict[data.get('id')] = f"game with id {data.get("id")} updated successfully!"
                     else:
-                        error_dict[data.get('name')] =  gamesSerial.errors
+                        error_dict[data.get('id')] =  gamesSerial.errors
                 else:
                     gameObjs    = gamesSerializer(data = data)
                     if gameObjs.is_valid():

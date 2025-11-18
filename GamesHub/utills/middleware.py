@@ -3,6 +3,8 @@ from django.urls import resolve, reverse, Resolver404
 from django.utils.deprecation import MiddlewareMixin
 from django.contrib.auth.models import AnonymousUser
 from .models import BlacklistedAccessToken
+from GamesHub.settings import REDIS_CLIENT
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 class EndpointRedirectMiddleware(MiddlewareMixin):
     def process_request(self, request):
@@ -23,6 +25,26 @@ class AccessRestrictionMiddleware(MiddlewareMixin):
                     del request.META['HTTP_AUTHORIZATION']
                     request.user = AnonymousUser()
                     return None
+        except Exception as e:
+            pass
+
+class UserTrackingMiddleware(MiddlewareMixin):
+    def process_request(self, request):
+        try:
+            jwt_auth = JWTAuthentication()
+
+            user_auth_tuple = jwt_auth.authenticate(request)
+            if user_auth_tuple is not None:
+                user, auth = user_auth_tuple
+                
+            if user.is_authenticated and "/detail/" in request.path:
+                game_id = request.path.split("/detail/")[-1]
+                user    = user.get_username()
+                
+                REDIS_CLIENT.hincrby(user, game_id, 1)
+                REDIS_CLIENT.expire(user, 60*60*24*30)
+                #print(REDIS_CLIENT.hgetall(user))
+
         except Exception as e:
             pass
         

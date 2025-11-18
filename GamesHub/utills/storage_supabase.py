@@ -1,6 +1,12 @@
 import boto3
 import os
 from datetime import datetime
+from supabase import create_client
+
+SUPABASE_URL = "https://ogasrlwtvqiilymwrmmk.storage.supabase.co"
+SUPABASE_KEY = os.getenv("SUPABASE_API_KEY")
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 access_key = os.getenv("SUPABASE_ACCESS_KEY_ID")
 secret_key = os.getenv("SUPABASE_SECRET_ACCESS_KEY")
