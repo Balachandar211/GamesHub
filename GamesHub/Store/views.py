@@ -3,10 +3,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Game, Cart, Wishlist
-from .serializers import cartSerializer, wishlistSerializer
+from .serializers import cartSerializer, wishlistSerializer, gamesSerializerSimplified
 from django.contrib.auth import get_user_model
 from utills.microservices import search
 from .documentation import cart_delete_schema, cart_get_schema, cart_patch_schema, cart_post_schema, whishlist_delete_schema, whishlist_get_schema, whishlist_patch_schema, whishlist_post_schema
+from GamesHub.settings import REDIS_CLIENT
+from GamesBuzz.models import GameInteraction
+from GamesBuzz.serializers import GameInteractionSerializer
+from django.db.models import Q
 User = get_user_model()
 
 
@@ -143,3 +147,26 @@ def WishlistUser(request):
             return Response({"message":f"wishlist for user {request.user.get_username()} deleted successfully!"}, status=status.HTTP_204_NO_CONTENT)
         except:
             return Response({"message":f"No wishlist exist for user {request.user.get_username()}"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def featuredPage(request):
+    try:
+        user_featured  = REDIS_CLIENT.hgetall(request.user.get_username())
+        user_featured  = list(map(lambda kv : (kv[0], int(kv[1])), user_featured.items()))
+        user_featured  = sorted(user_featured, key = lambda kv : kv[1], reverse=True)[:min(len(user_featured), 5)]
+        user_featured  = list(map(lambda v : v[0], user_featured))    
+        gameObjs       = Game.objects.filter(id__in = user_featured)
+        gameObjsSerial = gamesSerializerSimplified(gameObjs, many=True).data
+    except:
+        gameObjsSerial = {}
+
+    return Response({"message": "featured games for user", "games":gameObjsSerial}, status=status.HTTP_200_OK)
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def library(request):
+    gameInteractions       = GameInteraction.objects.filter(Q(user = request.user) & Q(in_library = True))
+    gameInteractionsSerial = GameInteractionSerializer(gameInteractions, many = True)
+    return Response({"message": "library contents", "games_in_library": gameInteractionsSerial.data}, status=status.HTTP_200_OK)

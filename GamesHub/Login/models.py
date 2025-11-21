@@ -1,11 +1,12 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from utills.storage_supabase import supabase
+from django.utils import timezone
 
 class AppUser(AbstractUser):
     profilePicture = models.URLField(null=True, default=None, blank=True)
     email          = models.EmailField()
-    phoneNumber    = models.CharField(max_length=15, null=True, default=None)
+    phoneNumber    = models.CharField(max_length=15, null=True, default=None, blank=True)
     is_active      = models.BooleanField(default=True)  
 
 
@@ -24,6 +25,9 @@ class AppUser(AbstractUser):
     
     def change_status(self):
         self.is_active = not self.is_active
+
+    def set_last_login(self):
+        self.last_login = timezone.now()
     
     def __str__(self):
         return self.username

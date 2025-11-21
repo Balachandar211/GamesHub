@@ -56,7 +56,6 @@ class Game(models.Model):
 
 class GamesMedia(models.Model):
     MEDIA_CHOICES = [
-        (0, ''),
         (1, 'Screen_Shot'),
         (2, 'Trailer')
         ]

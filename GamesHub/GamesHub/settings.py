@@ -48,7 +48,8 @@ INSTALLED_APPS = [
     'GamesBuzz',
     'utills',
     'drf_spectacular',
-    "drf_spectacular_sidecar"
+    "drf_spectacular_sidecar",
+    "GamesAdmin"
 ]
 
 
@@ -154,7 +155,7 @@ CACHES = {
 
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.getenv("NEON_DB_URL"),
+        default=os.getenv("XATA_DB"),
         engine="django.db.backends.postgresql"
     )
 }
@@ -168,6 +169,8 @@ SIMPLE_JWT = {
     'SIGNING_KEY': SECRET_KEY,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+USER_RECOVERABLE_TIME = timedelta(minutes=3)
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'

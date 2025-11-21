@@ -1,8 +1,9 @@
-from .models import Game, Cart, Wishlist
+from .models import Game, Cart, Wishlist, GamesMedia
 from rest_framework.serializers import ModelSerializer
 from rest_framework import serializers
 from utills.storage_supabase import upload_file_to_supabase
 from rest_framework.exceptions import ValidationError
+from utills.storage_supabase import supabase
 import re
 
 class gamesSerializer(ModelSerializer):
@@ -44,6 +45,7 @@ class gamesSerializerSimplified(ModelSerializer):
     def get_price(self, obj):
         return obj.get_actual_price()
 
+
 class cartSerializer(ModelSerializer):
     user = serializers.SerializerMethodField()
     games = gamesSerializerSimplified(many=True)
@@ -66,3 +68,17 @@ class wishlistSerializer(ModelSerializer):
 
     def get_user(self, obj):
         return obj.user.get_username()
+
+
+class GameMediaSerializer(ModelSerializer):
+    signed_url = serializers.SerializerMethodField()
+    class Meta:
+        model = GamesMedia
+        fields = ('media_type', 'signed_url')
+
+    def get_signed_url(self, obj):
+        if obj.url is not None and obj.media_type != 2:
+            url_path = obj.url.split("GamesHubMedia/")[1]
+            result = supabase.storage.from_("GamesHubMedia").create_signed_url(url_path, 600)
+            return result["signedURL"]
+        return obj.url

@@ -13,4 +13,12 @@ class GameInteractionSerializer(ModelSerializer):
             return value
 
     
-    
+class GameInteractionSerializerSimplified(ModelSerializer):
+    user   = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GameInteraction
+        fields = ('user', 'comment', 'rating')
+
+    def get_user(self, obj):
+        return obj.user.get_username()

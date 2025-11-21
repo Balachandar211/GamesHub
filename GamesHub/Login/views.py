@@ -43,14 +43,14 @@ def SignUp(request):
         refresh = RefreshToken.for_user(userObject)
 
         Subject    = f'Welcome to GamesHub, {request.data.get('username')}!'
-        message    = f'''Hi <b>{request.data.get('username')},</b><br><br>
+        message    = f"""Hi <b>{request.data.get('username')},</b><br><br>
                          Welcome to GamesHub — where epic adventures, legendary loot, and exclusive titles await!<br><br>
                         &#128377; Whether you're into pixel-perfect indies or blockbuster AAA hits,
                         we've got something for every kind of gamer.<br><br>
                         &#128293; Discover trending releases, hidden gems, and curated collections tailored to your playstyle.<br><br>
                         &#127873; Plus, enjoy early access deals, wishlist alerts, and community-powered reviews — all in one sleek hub.
                         Your next favorite game is just a click away. Let the quest begin!<br><br>
-                        <b>Game on,<br> — The GamesHub Team</b>'''
+                        <b>Game on,<br> — The GamesHub Team</b>"""
         
         recepients = [request.data.get('email')]
 
@@ -82,7 +82,8 @@ def Login(request):
         userObj = User.objects.get(username = request.data.get("username"))
         if userObj.check_password(request.data.get("password")):
             refresh = RefreshToken.for_user(userObj)
-
+            userObj.set_last_login()
+            userObj.save()
             response = Response({"message": f"User {userObj.get_username()} logged in", "username":userObj.get_username(), "profile_picture":userObj.get_profilePicture(), "Access_Token":str(refresh.access_token)}, status=status.HTTP_200_OK)
 
             response.set_cookie(
@@ -168,7 +169,8 @@ def extendSession(request):
         refresh_token.blacklist()
 
         refresh = RefreshToken.for_user(request.user)
-
+        request.user.set_last_login()
+        request.user.save()
         response = Response({"message":"Access Token generated successfully", "Access_Token":str(refresh.access_token)}, status=status.HTTP_200_OK)
 
         response.set_cookie(

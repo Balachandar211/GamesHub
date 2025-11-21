@@ -43,7 +43,6 @@ class UserTrackingMiddleware(MiddlewareMixin):
                 
                 REDIS_CLIENT.hincrby(user, game_id, 1)
                 REDIS_CLIENT.expire(user, 60*60*24*30)
-                #print(REDIS_CLIENT.hgetall(user))
 
         except Exception as e:
             pass

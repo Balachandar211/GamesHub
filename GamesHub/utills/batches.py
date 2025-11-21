@@ -39,3 +39,13 @@ def delete_expired_refresh_token():
     BlacklistedToken.objects.filter(token__in=expired_tokens).delete()
     expired_tokens.delete()
     return "Expired refresh tokens deleted"
+
+@app.task(name="delete_deleted_users")
+def delete_deleted_users():
+    inactiveUsers = User.objects.filter(is_active = False)
+    timeLine      = timezone.localtime() - settings.USER_RECOVERABLE_TIME
+    for inactiveUser in inactiveUsers:
+        if inactiveUser.last_login and inactiveUser.last_login <= timeLine:
+            inactiveUser.delete()
+    
+    return "Deleted deleted users of more than 30 days"

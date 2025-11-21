@@ -2,11 +2,15 @@ from rest_framework.decorators import api_view, permission_classes, parser_class
 from rest_framework.response import Response
 from rest_framework import status
 from utills.permissions import IsAdminOrReadOnly
-from Store.models import Game
-from Store.serializers import gamesSerializer
+from Store.models import Game, GamesMedia
+from Store.serializers import gamesSerializer, GameMediaSerializer
 from django.contrib.auth import get_user_model
 from utills.microservices import search
 from rest_framework.parsers import MultiPartParser
+from utills.storage_supabase import upload_file_to_supabase
+import re
+from rest_framework.exceptions import APIException
+from django.db.models import Q
 User = get_user_model()
 
 
@@ -113,3 +117,104 @@ def gamesAdmin(request):
             return Response({"error":f"use id or exact name as list of values"}, status=status.HTTP_400_BAD_REQUEST)
         
         return Response({"error":f"use id or exact name to request"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAdminOrReadOnly])
+@parser_classes([MultiPartParser])
+def manageGames(request, pk):
+    if request.method == "GET":
+        try:
+            gameObj        = Game.objects.get(pk = pk)
+            gameObjSerial  = gamesSerializer(gameObj)
+            try:
+                gameMedia           = GamesMedia.objects.get(game = gameObj)
+                gameMediaSerial     = GameMediaSerializer(gameMedia)
+                gameMediaSerialData = gameMediaSerial.data
+            except:
+                gameMediaSerialData = {}
+                
+            return Response({"message":f"game detail for game with id {pk}", "game":gameObjSerial.data, "media":gameMediaSerialData}, status=status.HTTP_200_OK)
+        except:
+            return Response({"error":f"requested game with id {pk} dosen't exist"}, status=status.HTTP_404_NOT_FOUND)
+        
+    if request.method == "PATCH":
+        try:
+            gameObj        = Game.objects.get(pk = pk)
+            gameObjSerial  = gamesSerializer(gameObj, data = request.data, partial=True)
+            if gameObjSerial.is_valid():
+                gameObjSerial.save()
+                return Response({"message":f"game id {pk} saved successfully!", "game":gameObjSerial.data}, status=status.HTTP_202_ACCEPTED)
+            return Response({"error":gameObjSerial.errors}, status=status.HTTP_400_BAD_REQUEST)
+        except:
+            return Response({"error":f"requested game with id {pk} dosen't exist"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if request.method == "DELETE":
+        try:
+            gameObj  = Game.objects.get(pk = pk)
+            gameObj.delete()
+            return Response({"message":f"game id {pk} deleted successfully!"}, status=status.HTTP_204_NO_CONTENT)
+        except:
+            return Response({"error":f"requested game with id {pk} dosen't exist"}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(["GET", "POST", "DELETE"])
+@permission_classes([IsAdminOrReadOnly])
+@parser_classes([MultiPartParser])
+def manageGamesMedia(request, pk):
+    if request.method == "GET":
+        try:
+            gameObj        = Game.objects.get(pk = pk)
+            try:
+                gameMedia           = GamesMedia.objects.filter(game = gameObj)
+                gameMediaSerial     = GameMediaSerializer(gameMedia, many = True)
+                gameMediaSerialData = gameMediaSerial.data
+            except Exception as e:
+                gameMediaSerialData = {}
+                
+            return Response({"message":f"game media detail for game with id {pk}", "media":gameMediaSerialData}, status=status.HTTP_200_OK)
+        except:
+            return Response({"error":f"requested game with id {pk} dosen't exist"}, status=status.HTTP_404_NOT_FOUND)
+    
+
+    if request.method == "POST":
+        try:
+            try:
+                gameObj        = Game.objects.get(pk = pk)
+                name = gameObj.get_name()
+                if int(request.data.get("media_type")) == 1:
+                    safe_path  = re.sub(r'[^a-zA-Z0-9\-_/\.]', '', name)
+                    screenshot = request.data.get("screenshot")
+                    valid_mime_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+
+                    if screenshot and screenshot.content_type not in valid_mime_types:
+                        Response({"error":"Only image files (JPEG, PNG, GIF, WEBP, JPG) are allowed."}, status=status.HTTP_400_BAD_REQUEST)
+                        
+                    if screenshot:
+                        public_url = upload_file_to_supabase(screenshot, f"{safe_path}/Screen_Shots")
+                
+                    GamesMedia(game = gameObj, media_type = 1, url = public_url).save()
+
+                    return Response({"message":f"game media for game with id {pk} saved successfully!"}, status=status.HTTP_201_CREATED)
+
+                if int(request.data.get("media_type")) == 2:
+                    GamesMedia(game = gameObj, media_type = 2, url = request.data.get("URL")).save()
+                    return Response({"message":f"game media for game with id {pk} saved successfully!"}, status=status.HTTP_201_CREATED)
+
+                raise APIException("media type selected is incorrect it should be 1 or 2")
+
+            except Exception as e:
+                return Response({"error":str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+        except Exception as e:
+            print(e)
+            return Response({"error":f"requested game with id {pk} dosen't exist"}, status=status.HTTP_404_NOT_FOUND)
+    
+
+    if request.method == "DELETE":
+        try:
+            gameObj        = Game.objects.get(pk = pk)
+            GamesMedia.objects.get(Q(id = request.data.get("id")) & Q(game = gameObj)).delete()
+            return Response({"message":"GameMedia object deleted successfully!"}, status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            return Response({"error":f"requested game media with id {request.data.get("id")} dosen't exist or incorrect media id with incorrect game id given"}, status=status.HTTP_400_BAD_REQUEST)
