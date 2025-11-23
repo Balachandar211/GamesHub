@@ -19,9 +19,9 @@ User = get_user_model()
 @parser_classes([MultiPartParser])
 def gamesAdmin(request):
     if request.method == "GET":
-        greeting, paginator, gamesSerial = search(request)
-        return Response({"message": f"Hi {greeting}", 'next': paginator.get_next_link(), 'previous': paginator.get_previous_link(), "Catalogue":gamesSerial.data}, status=status.HTTP_200_OK)
-    
+        gamesSerial, get_next_link, get_previous_link, count = search(request)
+        return Response({"message": "user catalogue", "count":count,  "next": get_next_link, "previous": get_previous_link, "catalogue":gamesSerial}, status=status.HTTP_200_OK)
+
     if request.method == "POST":
         if isinstance(request.data, dict):
             if not request.data.get('id'):

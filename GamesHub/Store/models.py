@@ -67,7 +67,12 @@ class Cart(models.Model):
     user          = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
     games         = models.ManyToManyField(Game)
 
+    def __str__(self):
+        return "cart for user " + self.user.get_username()
+
 class Wishlist(models.Model):
     user          = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
     games         = models.ManyToManyField(Game)
 
+    def __str__(self):
+        return "wishlist for user " + self.user.get_username()

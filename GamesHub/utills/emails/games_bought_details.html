@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Purchase Confirmation</title>
+</head>
+<body>
+  <p>
+    Hi <b>{{username}}</b>,<br><br>
+    Thanks for your Purchase &#127918;, your transaction details are as below:<br><br>
+  </p>
+
+  <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">
+    <tr>
+      <th>Game</th>
+      <th>Transaction ID</th>
+      <th>Price</th>
+    </tr>
+    {% for gameInt in gamesInteractions %}
+    <tr>
+      <td>{{ gameInt.game.get_name }}</td>
+      <td>{{ gameInt.transaction_id }}</td>
+      <td>{{ gameInt.purchase_price }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <p>
+    Total: {{ total }}<br><br>
+    <b>Game on,<br>— The GamesHub Team</b>
+  </p>
+  <footer>
+    <p><b>Note:</b> These are not actual purchases.</p>
+  </footer>
+</body>
+
+</html>

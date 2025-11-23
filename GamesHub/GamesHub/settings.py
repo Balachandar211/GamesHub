@@ -125,7 +125,7 @@ ROOT_URLCONF = 'GamesHub.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / "utills/emails"],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -199,6 +199,8 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
+
+COOKIE_LIFETIME = 24 * 60 * 60
 
 
 # Internationalization

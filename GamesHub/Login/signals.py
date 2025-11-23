@@ -1,4 +1,4 @@
-from django.db.models.signals import post_delete
+from django.db.models.signals import post_delete, pre_save
 from django.dispatch import receiver
 from utills.storage_supabase import delete_from_supabase
 from django.contrib.auth import get_user_model

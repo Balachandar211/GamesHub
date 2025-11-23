@@ -5,130 +5,194 @@ from rest_framework import status
 from Store.models import Game, GamesMedia, Cart, Wishlist
 from Store.serializers import gamesSerializerSimplified, gamesSerializer, GameMediaSerializer
 from django.urls import reverse
-from utills.microservices import transaction_id_generator
+from utills.microservices import transaction_id_generator, transaction_id_decrementor, mail_service
 from .models import GameInteraction
 from datetime import datetime
 from django.core.cache import cache
 from .serializers import GameInteractionSerializerSimplified, GameInteractionSerializer
 from django.db.models import Q
-from utills.microservices import mail_service
-
+from utills.email_helper import game_bought_details
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.db import IntegrityError
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def purchase(request):
-    to_buy  = {}
-    na_list = {}
-    total_price = 0
+    game_ids = request.data.get("id")
+
+    if game_ids is None or game_ids == '':
+        return Response({"error":{"code":"not_null_constraint", "message":"buying ids cannot be empty"}}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not isinstance(game_ids, list):
+        return Response({"error": {"code":"incorrect_datatype", "message":"games should be passed as a list"}}, status=status.HTTP_400_BAD_REQUEST)
+    
+
+    to_buy        = {}
+    na_list       = {}
+    total_price   = 0
+
     for id in request.data.get("id"):
-        gameObj      = Game.objects.get(id = id)
         try:
-            GameInteraction.objects.get(game = gameObj, user = request.user)
-            na_list[id]  = "Game already available in library"
-        except:
-            try:            
+            gameObj      = Game.objects.get(id = id)
+            try:
+                GameInteraction.objects.get(game = gameObj, user = request.user)
+                na_list[id]  = "Game already available in library"
+            except GameInteraction.DoesNotExist:
                 to_buy[id]   = gamesSerializerSimplified(gameObj).data
                 total_price += gameObj.get_price()
-            except:
-                na_list[id]  = "Game not available enter valid list"
-        
+            except Exception:
+                return Response({"error":{"code":"purchase_section_fail", "message":"errors in purchase section"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Game.DoesNotExist:
+            na_list[id]  = "Game not available enter valid id"
+        except (ValueError, ValidationError):
+            na_list[id]  = "Game not available enter valid id with correct format"
+        except Exception:
+            return Response({"error":{"code":"purchase_section_fail", "message":"errors in purchase section"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+     
     endpoint = reverse('buy')
 
     full_url = request.build_absolute_uri(endpoint)
     
-    return Response({"message": "redirect to endpoint with this payload except 'games_not_available'", "url":full_url, "Games_to_be_baught":to_buy, "games_not_available":na_list, "total_price": total_price}, status=status.HTTP_307_TEMPORARY_REDIRECT)
+    return Response({"message": "redirect to endpoint with this payload except 'invalid_or_owned_games'", "url":full_url, "Games_to_be_baught":to_buy, "invalid_or_owned_games":na_list, "total_price": round(total_price, 2)}, status=status.HTTP_200_OK)
+
+
+@transaction.atomic
+def buy_atomic(request):
+    transaction_ids  = {}
+    na_list          = {}
+    total            = 0
+    games_bought     = []
+    exception_500    = False
+
+    for id in request.data.get("id"):
+        try:
+            gameObj      = Game.objects.get(id = id)
+            try:
+                GameInteraction.objects.get(game = gameObj, user = request.user)
+                na_list[id]  = "Game already available in library"
+            except GameInteraction.DoesNotExist:
+                transaction_id        = transaction_id_generator()
+                price                 = gameObj.get_price()
+                total                += price
+                gameBoughtObj         = GameInteraction.objects.create(user = request.user, game = gameObj, purchase_date = datetime.now(), purchase_price = price, transaction_id = transaction_id)
+                games_bought.append(gameBoughtObj)
+                transaction_ids[id]   = transaction_id
+                
+                try:
+                    cart         = Cart.objects.get(user = request.user)
+                    cart.games.remove(gameObj)
+                except Cart.DoesNotExist:
+                    pass #nothing needed to be done as there is no cart
+
+                try:
+                    wishlist     = Wishlist.objects.get(user = request.user)
+                    wishlist.games.remove(gameObj)
+                except Wishlist.DoesNotExist:
+                    pass #nothing needed to be done as there is no cart
+
+            except IntegrityError as e:
+                transaction_id_decrementor()
+                raise
+            except Exception:
+                exception_500 = True
+
+        except Game.DoesNotExist:
+            na_list[id]  = "Game not available enter valid id"
+        except (ValueError, ValidationError):
+            na_list[id]  = "Game not available enter valid id with correct format"
+        except Exception:
+            exception_500 = True
+    
+    response_message = f"Games requested bought successfully!" if len(transaction_ids) > 0 else "Nothing to buy"
+
+    return transaction_ids, games_bought, total, response_message, na_list, exception_500
+
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def buy(request):
-    transaction_ids = {}
-    na_list         = {}
-    html_data       = ''
-    total           = 0
+    game_ids = request.data.get("id")
 
-    for id in request.data.get("id"):
-        gameObj      = Game.objects.get(id = id)
-        cart         = Cart.objects.get(user = request.user)
-        wishlist     = Wishlist.objects.get(user = request.user)
-        try:
-            GameInteraction.objects.get(game = gameObj, user = request.user)
-            na_list[id]  = "Game already available in library"
-        except:
-            cart.games.remove(gameObj)
-            wishlist.games.remove(gameObj)
-            transaction_id        = transaction_id_generator()
-            transaction_ids[id]   = transaction_id
-            price                 = gameObj.get_price()
-            total                += price
-            html_data += f"<tr><td>{gameObj.get_name()}</td><td>{transaction_id}</td><td>{price}</td></tr>"
-            gameBoughtObj         = GameInteraction.objects.create(user = request.user, game = gameObj, purchase_date = datetime.now(), purchase_price = price, transaction_id = transaction_id)
-            gameBoughtObj.save()
+    if game_ids is None or game_ids == '':
+        return Response({"error":{"code":"not_null_constraint", "message":"buying ids cannot be empty"}}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not isinstance(game_ids, list):
+        return Response({"error": {"code":"incorrect_datatype", "message":"games should be passed as a list"}}, status=status.HTTP_400_BAD_REQUEST)
+    
+    transaction_ids, games_bought, total, response_message, na_list, exception_500 = buy_atomic(request)
+
+    if exception_500:
+        return Response({"error":{"code":"internal_buying_point_error", "message":"internal server error"}, "transaction_ids":transaction_ids, "errors":na_list}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    if len(transaction_ids) > 0:
+
+        Subject    = f'Game{'s' if len(transaction_ids) > 1 else ''} Purchase Confirmation'
+        message    = game_bought_details({"username":request.user.get_username(), "gamesInteractions":games_bought, "total":total})
         
-            respone_message = f"Games requested bought successfully!" if len(transaction_ids) > 0 else "Nothing to buy"
+        recepients = [request.user.get_email()]
 
-            if len(transaction_ids) > 0:
-
-                Subject    = f'Game{'s' if len(transaction_ids) > 1 else ''} Purchase Confirmation'
-                message    = f"""Hi <b>{request.user.get_username()},</b><br><br>
-                                Thanks for your Purchase &#127918;, your transaction details are as below,<br><br>
-                                <table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;'>
-                                    <tr>
-                                        <th>Game</th>
-                                        <th>Transaction ID</th>
-                                        <th>Price</th>
-                                    <tr>
-                                    {html_data}
-                                </table><br>
-                                Total : {total}<br><br>
-                                <b>Game on,<br> — The GamesHub Team</b>"""
-                
-                recepients = [request.user.get_email()]
-
-                mail_result, message_response = mail_service(Subject, message, recepients)
+        mail_result, _ = mail_service(Subject, message, recepients)
         
-    return Response({"message":respone_message, "Transaction_IDs":transaction_ids, "errors":na_list}, status=status.HTTP_200_OK)
-        
+        if not mail_result:
+            return Response({"error":{"code":"mailer_api_failed", "message":"mailer service failed but games bought added successfully"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    return Response({"message":response_message, "important_note":"these are not actual purchases", "transaction_ids":transaction_ids, "errors":na_list}, status=status.HTTP_200_OK)
+       
 
 @api_view(["GET"])
 def games_detail(request, pk):
-    if request.method == "GET":
-        try:
-            cached_game = cache.get(pk)
-            if cached_game:
-                game = cached_game
-            else:
-                game  = Game.objects.get(pk = pk) 
-                cache.set(pk, game, timeout=600)
+    if request.user.is_authenticated:
+        key = request.user.get_username() + str(pk)
+    else:
+        key = "anonymous_user" + str(pk)
+
+    cached_game = cache.get(key)
+    if cached_game:
+        return cached_game
             
-            gameMedia       = GamesMedia.objects.filter(game = game)
-            gameMediaSerial = GameMediaSerializer(gameMedia, many = True)
+    try:
+        game  = Game.objects.get(pk = pk) 
+        
+        gameMedia       = GamesMedia.objects.filter(game = game)
+        gameMediaSerial = GameMediaSerializer(gameMedia, many = True)
 
-            if request.user.is_authenticated:
-                gameInteractionUser           = GameInteraction.objects.filter(Q(game = game) & Q(user = request.user))
-                gameInteractionSerialUser     = GameInteractionSerializerSimplified(gameInteractionUser, many = True)
-                gameInteractionSerialDataUser = gameInteractionSerialUser.data
-                library_flag                  = gameInteractionUser.exists()
+        if request.user.is_authenticated:
+            gameInteractionUser           = GameInteraction.objects.filter(Q(game = game) & Q(user = request.user))
+            gameInteractionSerialUser     = GameInteractionSerializerSimplified(gameInteractionUser, many = True)
+            gameInteractionSerialDataUser = gameInteractionSerialUser.data
+            library_flag                  = gameInteractionUser.exists()
 
-                gameInteraction               = GameInteraction.objects.filter(Q(game = game) & ~Q(user = request.user))
-                gameInteractionSerial         = GameInteractionSerializerSimplified(gameInteraction, many = True)
-                gameInteractionSerialData     = gameInteractionSerial.data
-            else:
-                gameInteractionSerialDataUser = {}
-                library_flag                  = False
+            gameInteraction               = GameInteraction.objects.filter(Q(game = game) & ~Q(user = request.user))
+            gameInteractionSerial         = GameInteractionSerializerSimplified(gameInteraction, many = True)
+            gameInteractionSerialData     = gameInteractionSerial.data
 
-                gameInteraction               = GameInteraction.objects.filter(Q(game = game))
-                gameInteractionSerial         = GameInteractionSerializerSimplified(gameInteraction, many = True)
-                gameInteractionSerialData     = gameInteractionSerial.data
-
-            gameSerialData = gamesSerializer(game)
-            gameData       = gameSerialData.data
-        except Exception as e:
-            gameData                      = {}
-            gameInteractionSerialData     = {}
+            key = request.user.get_username() + str(pk)
+        else:
             gameInteractionSerialDataUser = {}
             library_flag                  = False
 
-        return Response({"message": f"game detail for pk {pk}", "in_library":library_flag, "game":gameData, "game_media":gameMediaSerial.data, "user_comment": gameInteractionSerialDataUser, "comments":gameInteractionSerialData }, status=status.HTTP_200_OK)
+            gameInteraction               = GameInteraction.objects.filter(Q(game = game))
+            gameInteractionSerial         = GameInteractionSerializerSimplified(gameInteraction, many = True)
+            gameInteractionSerialData     = gameInteractionSerial.data
+
+            key = "anonymous_user" + str(pk)
+
+        gameSerialData = gamesSerializer(game)
+        gameData       = gameSerialData.data
+    except Game.DoesNotExist:
+        return Response({"error": {"code":"do_not_exist", "message":"game object doesn't exist"}}, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
+        return Response({"error":{"code":"game_detail_failed", "message":"please try back later"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    response = Response({"message": f"game detail for pk {pk}", "in_library":library_flag, "game":gameData, "game_media":gameMediaSerial.data, "user_comment": gameInteractionSerialDataUser, "comments":gameInteractionSerialData }, status=status.HTTP_200_OK)
+    
+    cache.set(key, response, timeout=3600)
+
+    return Response({"message": f"game detail for pk {pk}", "in_library":library_flag, "game":gameData, "game_media":gameMediaSerial.data, "user_comment": gameInteractionSerialDataUser, "comments":gameInteractionSerialData }, status=status.HTTP_200_OK)
     
 
 
@@ -137,17 +201,20 @@ def games_detail(request, pk):
 def comment(request, pk):
     try:
         gameObj        = Game.objects.get(id = pk)
-    except:
-        return Response({"error":f"no game with id {pk} exist"}, status= status.HTTP_404_NOT_FOUND)
+    except Game.DoesNotExist:
+        return Response({"error":{"code":"do_not_exist", "message":f"no game with id {pk} exist"}}, status= status.HTTP_404_NOT_FOUND)
     
     try:
         gameInteration = GameInteraction.objects.get(game = gameObj, user = request.user)
-    except:
-        return Response({"error":f"no game with id {pk} exist in library"}, status= status.HTTP_404_NOT_FOUND)
+    except GameInteraction.DoesNotExist:
+        return Response({"error":{"code":"do_not_exist", "message":f"game is not present in library"}}, status= status.HTTP_404_NOT_FOUND)
+    try:
+        gameInterationSerial = GameInteractionSerializer(gameInteration, data = request.data, partial = True)
 
-    gameInterationSerial = GameInteractionSerializer(gameInteration, data = request.data, partial = True)
-
-    if gameInterationSerial.is_valid():
-        gameInterationSerial.save()
-        return Response({"message":"Comment saved successfully!"}, status=status.HTTP_202_ACCEPTED)
-    return Response({"errors":gameInterationSerial.errors}, status=status.HTTP_400_BAD_REQUEST)
+        if gameInterationSerial.is_valid():
+            gameInterationSerial.save()
+            return Response({"message":"Comment saved successfully!"}, status=status.HTTP_202_ACCEPTED)
+        return Response({"errors":{"code":"validation_error", "details":gameInterationSerial.errors}}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception:
+        return Response({"error":{"code":"comment_section_fail", "message":"errors in comment section"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+       

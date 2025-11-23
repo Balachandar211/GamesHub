@@ -1,4 +1,4 @@
-from django.db.models.signals import post_save, pre_save
+from django.db.models.signals import post_save, pre_save, post_delete
 from django.dispatch import receiver
 from .models import GameInteraction
 from Store.models import Game
@@ -35,5 +35,13 @@ def update_game_rating(sender, instance, **kwargs):
         cache.clear()
 
 @receiver(post_save, sender=Game)
+def update_cache_after_save(sender, instance, **kwargs):
+    cache.clear()
+
+@receiver(post_delete, sender=Game)
+def update_cache_after_delete(sender, instance, **kwargs):
+    cache.clear()
+
+@receiver(post_save, sender=GameInteraction)
 def update_cache(sender, instance, **kwargs):
     cache.clear()

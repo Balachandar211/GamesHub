@@ -37,8 +37,9 @@ class UserTrackingMiddleware(MiddlewareMixin):
             if user_auth_tuple is not None:
                 user, auth = user_auth_tuple
                 
-            if user.is_authenticated and "/detail/" in request.path:
+            if user.is_authenticated and "/detail/" in request.path and "/comment" not in request.path:
                 game_id = request.path.split("/detail/")[-1]
+
                 user    = user.get_username()
                 
                 REDIS_CLIENT.hincrby(user, game_id, 1)

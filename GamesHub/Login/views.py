@@ -16,6 +16,11 @@ import os
 from utills.models import BlacklistedAccessToken
 from django.utils import timezone
 from .documentation import signup_schema, login_schema, extend_session_schema, update_user_schema, logout_session_schema, recover_user_schema, delete_user_schema, forgot_password_schema
+from GamesHub.settings import COOKIE_LIFETIME
+from utills.email_helper import signup_email, forgot_password_email, password_change_success_email, account_recovery_success_email, recover_account_email, user_deletion_email, user_deletion_confirmation, recoverable_deletion_confirmation
+from rest_framework_simplejwt.exceptions import TokenError
+import secrets
+from utills.storage_supabase import delete_from_supabase
 User = get_user_model()
 
 EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
@@ -25,41 +30,46 @@ EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
 @api_view(["POST"])
 @parser_classes([MultiPartParser])
 def SignUp(request):
-    if User.objects.filter(username = request.data.get("username")).exists():
-        return Response({"error": "Username already Exists"}, status=status.HTTP_400_BAD_REQUEST)
+    if request.data.get("username") is None or request.data.get("username") == '':
+        return Response({"error": {"code":"not_null_constraint", "message":"username cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+
+    if request.data.get("email") is None or request.data.get("email") == '':
+        return Response({"error": {"code":"not_null_constraint", "message":"email id cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+
+    if request.data.get("password") is None or request.data.get("password") == '':
+        return Response({"error": {"code":"not_null_constraint", "message":"password cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
 
     # API to check if email ID provided is valid
-    email_check_response = requests.get(f"https://emailreputation.abstractapi.com/v1/?api_key={EMAIL_CHECKER_API_KEY}&email={request.data.get('email')}")
-    
-    email_check_response = email_check_response.json()
+    try:
+        email_check_response = requests.get(f"https://emailreputation.abstractapi.com/v1/?api_key={EMAIL_CHECKER_API_KEY}&email={request.data.get('email')}", timeout=5)
+        
+        email_check_response = email_check_response.json()
+        if not email_check_response["email_deliverability"]["is_smtp_valid"]:
+            return  Response({"error":{"code": "invalid_email", "message":"incorrect email id provided"}}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+    except (requests.RequestException, ValueError):
+        return  Response({"error":{"code":"mail_reputation_server_not_reachable", "message":"email validation service unavailable"}}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-    if not email_check_response["email_deliverability"]["is_smtp_valid"]:
-        return  Response({"error":"Incorrect email ID provided"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if User.objects.filter(username__iexact = request.data.get("username")).exists():
+        return Response({"error":{"code":"username_integrity_error", "message":"username already exists"}}, status=status.HTTP_409_CONFLICT)
 
     userObject     = userSerializer(data = request.data)
 
     if userObject.is_valid():
-        userObject = userObject.save()
-        refresh = RefreshToken.for_user(userObject)
+        user = userObject.save()
+        refresh = RefreshToken.for_user(user)
 
-        Subject    = f'Welcome to GamesHub, {request.data.get('username')}!'
-        message    = f"""Hi <b>{request.data.get('username')},</b><br><br>
-                         Welcome to GamesHub — where epic adventures, legendary loot, and exclusive titles await!<br><br>
-                        &#128377; Whether you're into pixel-perfect indies or blockbuster AAA hits,
-                        we've got something for every kind of gamer.<br><br>
-                        &#128293; Discover trending releases, hidden gems, and curated collections tailored to your playstyle.<br><br>
-                        &#127873; Plus, enjoy early access deals, wishlist alerts, and community-powered reviews — all in one sleek hub.
-                        Your next favorite game is just a click away. Let the quest begin!<br><br>
-                        <b>Game on,<br> — The GamesHub Team</b>"""
+        Subject    = f'Welcome to GamesHub, {user.get_username()}!'
+        message    = signup_email({"username": user.get_username()})
         
-        recepients = [request.data.get('email')]
+        recipients = [user.get_email()]
 
-        mail_result, message_response = mail_service(Subject, message, recepients)
+        mail_result, _ = mail_service(Subject, message, recipients)
 
         if not mail_result:
-            Response({"error":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error":{"code":"mailer_api_failed", "message":"mailer service failed"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        response = Response({"message": f"User {request.data.get('username')} added successfully", "username":userObject.get_username(), "profile_picture":userObject.get_profilePicture(), "Access_Token":str(refresh.access_token)}, status=status.HTTP_201_CREATED)
+        response = Response({"message": f"User {user.get_username()} added successfully", "user":{ "username":user.get_username(), "profile_picture":user.get_profilePicture()}, "access_token":str(refresh.access_token)}, status=status.HTTP_201_CREATED)
     
         response.set_cookie(
                 key='Refresh_Token',
@@ -67,24 +77,40 @@ def SignUp(request):
                 httponly=True,
                 secure=True,
                 samesite='Strict',
-                max_age= 24 * 60 * 60,
+                max_age= COOKIE_LIFETIME,
                 path="/user/session/"
             )
         
         return response
     
-    return Response({"error":userObject.errors}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({"error":{"code": "validation_error", "message": "invalid input data", "details": userObject.errors}}, status=status.HTTP_400_BAD_REQUEST)
 
 @login_schema
 @api_view(["POST"])
 def Login(request):
+    if request.data.get("username") is None:
+        return Response({"error": {"code":"not_null_constraint", "message":"username cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+
+    if request.data.get("password") is None:
+        return Response({"error": {"code":"not_null_constraint", "message":"password cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+
     try:
-        userObj = User.objects.get(username = request.data.get("username"))
+        userObj = User.objects.get(username__iexact = request.data.get("username"))
+
+        if not userObj.is_active:
+            return Response({"error": {"code":"recovery_needed", "message":"requested user is inactive please send a recovery request"}}, status=status.HTTP_400_BAD_REQUEST)
+
         if userObj.check_password(request.data.get("password")):
             refresh = RefreshToken.for_user(userObj)
             userObj.set_last_login()
             userObj.save()
-            response = Response({"message": f"User {userObj.get_username()} logged in", "username":userObj.get_username(), "profile_picture":userObj.get_profilePicture(), "Access_Token":str(refresh.access_token)}, status=status.HTTP_200_OK)
+            response = Response({"message": f"User {userObj.get_username()} logged in", 
+                                 "user": {
+                                    "username": userObj.get_username(),
+                                    "profile_picture": userObj.get_profilePicture()
+                                 },
+                                 "access_token": str(refresh.access_token)
+                                }, status=status.HTTP_200_OK)
 
             response.set_cookie(
                 key='Refresh_Token',
@@ -92,78 +118,111 @@ def Login(request):
                 httponly=True,
                 secure=True,
                 samesite='Strict',
-                max_age= 24 * 60 * 60,
+                max_age= COOKIE_LIFETIME,
                 path="/user/session/"
             )
 
             return response
         else:
-            return Response({"message":f"Incorrect password for user {userObj.get_username()}"}, status=status.HTTP_400_BAD_REQUEST)
-    except Exception as e:
-        print(e)
-        return Response({"message":"username not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error":{"code":"invalid_credentials", "message":"incorrect password for user"}}, status=status.HTTP_400_BAD_REQUEST)
+    except User.DoesNotExist:
+        return Response({"error":{"code":"username_not_found", "message":"requested username not found"}}, status=status.HTTP_404_NOT_FOUND)
     
 @forgot_password_schema
 @api_view(["POST"])
 def Forgot_Password(request):
+    username = request.data.get("username")
+    password = request.data.get("password")
+
+    if username is None or username == '':
+        return Response({"error": {"code":"not_null_constraint", "message":"username cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+
+
     if "OTP" in request.data:
         otp      = request.data.get("OTP")
         try:
-            userObj  = User.objects.get(username = request.data.get("username"))
-            otpObj   = OTP.objects.get(account = request.data.get("username"))
+            userObj  = User.objects.get(username__iexact = username)
+            try:
+                otpObj   = OTP.objects.get(account = username)
+            except OTP.DoesNotExist:
+                return Response({"error":{"code":"otp_not_found", "message":"OTP not generated for this user"}}, status=status.HTTP_404_NOT_FOUND)
+    
             gen_otp, time_gen = otpObj.get_details()
 
-            if int(otp) == gen_otp and (time_gen + 300 >= int(time.time())):
-                userObj.set_password(request.data.get("password"))
+            if password is None or password == '':
+                return Response({"error": {"code":"not_null_constraint", "message":"password cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+
+            if secrets.compare_digest(str(otp), str(gen_otp)) and (time_gen + 300 >= int(time.time())):
+                if password is None or password == '':
+                    return Response({"error": {"code":"not_null_constraint", "message":"password cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+
+                userObj.set_password(password)
                 userObj.save()
                 otpObj.delete()
-                return Response({"message": f"Password change successfull for account {request.data.get("username")} please continue login"}, status=status.HTTP_202_ACCEPTED)
+                email_id = userObj.get_email()
+
+                Subject    = 'GamesHub Password Reset Successfull'
+                message    = password_change_success_email({"username":userObj.get_username()})
+                recepients = [email_id]
+
+                mail_result, _ = mail_service(Subject, message, recepients)
+
+                if not mail_result:
+                    return Response({"error":{"code":"mailer_api_failed", "message":"mailer service failed"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+       
+
+                return Response({"message": f"password change successful, please continue login"}, status=status.HTTP_202_ACCEPTED)
             else:
-                return Response({"message": "OTP either expired or incorrect"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error":{"code":"otp_invalid_or_expired","message":"OTP either expired or incorrect"}}, status=status.HTTP_400_BAD_REQUEST)
 
-
-        except Exception as e:
-            print(e)
-            return Response({"message": "Incorrect username entered or OTP not generated for this user"}, status=status.HTTP_400_BAD_REQUEST)
-
+        except User.DoesNotExist:
+            return Response({"error":{"code":"username_not_found", "message":"requested username not found"}}, status=status.HTTP_404_NOT_FOUND)
+    
     else:
         try:
-            userObj  = User.objects.get(username = request.data.get("username"))
+            userObj  = User.objects.get(username__iexact = username)
             email_id = userObj.get_email()
-            otp_num  = random.randint(1000, 9999)
+            otp_num  = secrets.randbelow(900000) + 100000
 
-            if OTP.objects.filter(account = request.data.get("username")).exists():
-                otpObj   = OTP.objects.get(account = request.data.get("username"))
-                otpObj.set_details(otp_num, time.time())
-            else:    
-                otpObj   = OTP(otp=otp_num, account = request.data.get("username"), time = time.time())
+            otpObj, _ = OTP.objects.get_or_create(account=username)
+            otpObj.set_details(otp_num, time.time())
             otpObj.save()
 
-            Subject    = 'GamesHub Account Recovery'
-            message    = f'Your otp to reset password for account <b>{request.data.get("username")}</b> is <b>{otp_num}</b>'
+            Subject    = 'GamesHub Password Reset'
+            message    = forgot_password_email({"username":userObj.get_username(), "otp_num":otp_num})
             recepients = [email_id]
 
-            mail_result, message_response = mail_service(Subject, message, recepients)
+            mail_result, _ = mail_service(Subject, message, recepients)
 
             if not mail_result:
-                Response({"errors":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({"error":{"code":"mailer_api_failed", "message":"mailer service failed"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            return Response({"message":f"otp sent to {email_id} for password reset for account {request.data.get("username")}"}, status=status.HTTP_201_CREATED)
-        except Exception as e:
-            print(e)
-            return Response({"message":f"Incorrect Username {request.data.get("username")}"}, status=status.HTTP_400_BAD_REQUEST)
-
+            return Response({"message":f"otp sent successfully"}, status=status.HTTP_201_CREATED)
+        
+        except User.DoesNotExist:
+            return Response({"error":{"code":"username_not_found", "message":"requested username not found"}}, status=status.HTTP_404_NOT_FOUND)
+    
 
 @extend_session_schema
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def extendSession(request):
     refresh   = request.COOKIES.get('Refresh_Token')
+
     if not refresh:
-        return Response({"message":"Refresh token cookie not found"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error":{"code":"refresh_token_not_found", "message":"refresh token cookie not found"}}, status=status.HTTP_400_BAD_REQUEST)
+    
     try:
         refresh_token    = RefreshToken(refresh)
-        blacklist_access = BlacklistedAccessToken(access_token = request.META['HTTP_AUTHORIZATION'].split(' ')[1], blacklisted_time =  timezone.now())
+
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+
+        try:
+            access_token = auth_header.split()[1]
+        except IndexError:
+            return Response({"error":{"code":"invalid_authorization_header","message":"authorization header malformed"}}, status=status.HTTP_400_BAD_REQUEST)
+        
+        blacklist_access = BlacklistedAccessToken(access_token = access_token, blacklisted_time =  timezone.now())
         blacklist_access.save()
 
         refresh_token.blacklist()
@@ -171,7 +230,8 @@ def extendSession(request):
         refresh = RefreshToken.for_user(request.user)
         request.user.set_last_login()
         request.user.save()
-        response = Response({"message":"Access Token generated successfully", "Access_Token":str(refresh.access_token)}, status=status.HTTP_200_OK)
+
+        response = Response({"message":"access Token generated successfully", "access_token":str(refresh.access_token)}, status=status.HTTP_200_OK)
 
         response.set_cookie(
                 key='Refresh_Token',
@@ -179,34 +239,43 @@ def extendSession(request):
                 httponly=True,
                 secure=True,
                 samesite='Strict',
-                max_age= 24 * 60 * 60,
+                max_age= COOKIE_LIFETIME,
                 path="/user/session/"
             )
 
         return response
-    except:
-        return Response({"message":"Refresh token incorrect or expired"}, status=status.HTTP_401_UNAUTHORIZED)
+    except TokenError:
+        return Response({"error":{"code":"invalid_refresh_token","message":"refresh token incorrect or expired"}}, status=status.HTTP_401_UNAUTHORIZED)
 
 @logout_session_schema    
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def logout(request):
     refresh   = request.COOKIES.get('Refresh_Token')
-    if refresh is None:
-        return Response({"message":"Refresh token cookie not found"}, status=status.HTTP_400_BAD_REQUEST)
+    if not refresh:
+        return Response({"error":{"code":"refresh_token_not_found", "message":"refresh token cookie not found"}}, status=status.HTTP_400_BAD_REQUEST)
+    
     try:
         user_name     = request.user.get_username()
         refresh_token = RefreshToken(refresh)
-        blacklist_access = BlacklistedAccessToken(access_token = request.META['HTTP_AUTHORIZATION'].split(' ')[1], blacklisted_time =  timezone.now())
+
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+
+        try:
+            access_token = auth_header.split()[1]
+        except IndexError:
+            return Response({"error":{"code":"invalid_authorization_header","message":"authorization header malformed"}}, status=status.HTTP_400_BAD_REQUEST)
+        
+        blacklist_access = BlacklistedAccessToken(access_token = access_token, blacklisted_time =  timezone.now())
         blacklist_access.save()
         refresh_token.blacklist()
+
         response = Response({"message":f"user {user_name} logged out successfully!"}, status=status.HTTP_205_RESET_CONTENT)
         response.delete_cookie('Refresh_Token', path='/user/session/')
 
         return response
-    except Exception as e:
-        print(e)
-        return Response({"message":"Refresh token incorrect or expired"}, status=status.HTTP_401_UNAUTHORIZED)
+    except TokenError:
+        return Response({"error":{"code":"invalid_refresh_token","message":"refresh token incorrect or expired"}}, status=status.HTTP_401_UNAUTHORIZED)
 
 
 @delete_user_schema
@@ -218,85 +287,64 @@ def delete_user(request):
     username = request.user.get_username()
 
     if request.data.get("OTP") is None:
-        otp_num  = random.randint(1000, 9999)
+        otp_num  = secrets.randbelow(900000) + 100000
 
-        if OTP.objects.filter(account = username).exists():
-            otpObj   = OTP.objects.get(account = username)
-            otpObj.set_details(otp_num, time.time())
-        else:    
-            otpObj   = OTP(otp=otp_num, account = username, time = time.time())
+        otpObj, _ = OTP.objects.get_or_create(account=username)
+        otpObj.set_details(otp_num, time.time())
         otpObj.save()
-
         
         Subject    = 'GamesHub Account Deletion'
-        message    = f'Your otp to delete account is <b>{otp_num}</b>'
+        message    = user_deletion_email({"username":username, "otp_num":otp_num})
         recepients = [email_id]
 
-        mail_result, message_response = mail_service(Subject, message, recepients)
+        mail_result, _ = mail_service(Subject, message, recepients)
 
         if not mail_result:
-            Response({"errors":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error":{"code":"mailer_api_failed", "message":"mailer service failed"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        return Response({"message": f"OTP created successfully for account deletion for user {username}"}, status=status.HTTP_201_CREATED)
+        return Response({"message":f"otp sent successfully"}, status=status.HTTP_201_CREATED)
 
     else:
         otp      = request.data.get("OTP")
-
-        if int(request.data.get("delete_permanently")) == 1:
             
-            try:
-                otpObj   = OTP.objects.get(account = username)
-                gen_otp, time_gen = otpObj.get_details()
-                
-                if int(otp) == gen_otp and (time_gen + 300 >= int(time.time())):
-                    if check_password(request.data.get("password"), userObj.get_password()):
-                        userObj.delete()
-                        otpObj.delete()
+        try:
+            otpObj   = OTP.objects.get(account = username)
+        except OTP.DoesNotExist:
+            return Response({"error":{"code":"otp_not_found", "message":"OTP not generated for this user"}}, status=status.HTTP_404_NOT_FOUND)
 
-                        Subject    = 'GamesHub Account Deletion Confirmation'
-                        message    = f'Your user account <b>{username}</b> deleted permanently'
-                        recepients = [email_id]
+        gen_otp, time_gen = otpObj.get_details()
 
-                        mail_result, message_response = mail_service(Subject, message, recepients)
+        if secrets.compare_digest(str(otp), str(gen_otp)) and (time_gen + 300 >= int(time.time())):
+            if request.data.get("delete_permanently")  and (request.data.get("delete_permanently") in (True, "true", "1", 1)):
+                if check_password(request.data.get("password"), userObj.get_password()):
+                    userObj.delete()
+                    otpObj.delete()
 
-                        if not mail_result:
-                            Response({"errors":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-                        return Response({"message": f"user account {username} deleted permanently"}, status=status.HTTP_204_NO_CONTENT)
-                    else:
-                        return Response({"message": f"incorrect password for user account {username}"}, status=status.HTTP_400_BAD_REQUEST)
-                                   
+                    Subject      = 'GamesHub Account Deletion Permanently'
+                    message      = user_deletion_confirmation({"username":username})
+                    response_msg = "user account deleted permanently"
                 else:
-                    return Response({"message": "OTP either expired or incorrect"}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({"error":{"code":"invalid_credentials", "message":"incorrect password for user account"}}, status=status.HTTP_400_BAD_REQUEST)
+       
+            else:
+                userObj.change_status()
+                userObj.save()
+
+                Subject      = 'GamesHub Account Deletion Confirmation'
+                message      = recoverable_deletion_confirmation({"username":username})
+                response_msg = "user account deleted and can be recovered within 30 days"
+
+            recepients     = [email_id]
+            mail_result, _ = mail_service(Subject, message, recepients)
+
+            if not mail_result:
+                return Response({"error":{"code":"mailer_api_failed", "message":"mailer service failed"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            return Response({"message": response_msg}, status=status.HTTP_204_NO_CONTENT)
+        
+        return Response({"error":{"code":"otp_invalid_or_expired","message":"OTP either expired or incorrect"}}, status=status.HTTP_400_BAD_REQUEST)
 
 
-            except Exception as e:
-                return Response({"message": "Incorrect username entered or OTP not generated for this user"}, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            try:
-                otpObj   = OTP.objects.get(account = username)
-                gen_otp, time_gen = otpObj.get_details()
-                
-                if int(otp) == gen_otp and (time_gen + 300 >= int(time.time())):
-                    userObj.change_status()
-                    userObj.save()
-
-                    Subject    = 'GamesHub Account Deletion Confirmation'
-                    message    = f'Your user account <b>{username}</b> deleted successfully and can be recovered within 30 days'
-                    recepients = [email_id]
-
-                    mail_result, message_response = mail_service(Subject, message, recepients)
-
-                    if not mail_result:
-                        Response({"errors":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-                    return Response({"message": f"user account {username} deleted successfully and can be recovered within 30 days"}, status=status.HTTP_204_NO_CONTENT)
-                else:
-                    return Response({"message": "OTP either expired or incorrect"}, status=status.HTTP_400_BAD_REQUEST)
-
-
-            except Exception as e:
-                return Response({"message": "Incorrect username entered or OTP not generated for this user"}, status=status.HTTP_400_BAD_REQUEST)
         
 
 @update_user_schema
@@ -306,86 +354,115 @@ def delete_user(request):
 def update_user(request):
     userObj            = request.user
     if request.data.get("password") is not None:
-        return Response({"error": "use forgot_password endpoint to update password"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": {"code":"incorrect_end_point", "message": "use forgot_password endpoint to update password"}}, status=status.HTTP_400_BAD_REQUEST)
     
     allowed_keys = ['first_name', 'last_name', 'profilePicture', 'email', 'phoneNumber']
+
     if not set(request.data.keys()).issubset(allowed_keys):
         unexpected = set(request.data.keys()) - set(allowed_keys)
-        return Response({"error": f"unexpected keys {unexpected}"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": {"code":"forbidden_keys", "message":f"unexpected keys {unexpected}"}}, status=status.HTTP_400_BAD_REQUEST)
     
-    email_check_response = requests.get(f"https://emailreputation.abstractapi.com/v1/?api_key={EMAIL_CHECKER_API_KEY}&email={request.data.get('email')}")
-    
-    email_check_response = email_check_response.json()
+    if "profilePicture" in request.data:
+        profile_picture_url = userObj.get_profilePicture_url()
+    else:
+        profile_picture_url = ''
 
-    if not email_check_response["email_deliverability"]["is_smtp_valid"]:
-        return  Response({"error":"Incorrect email ID provided"}, status=status.HTTP_400_BAD_REQUEST)
+    # API to check if email ID provided is valid
+    if "email" in request.data:
+        try:
+            email_check_response = requests.get(f"https://emailreputation.abstractapi.com/v1/?api_key={EMAIL_CHECKER_API_KEY}&email={request.data.get('email')}", timeout=5)
+            
+            email_check_response = email_check_response.json()
+
+            if not email_check_response["email_deliverability"]["is_smtp_valid"]:
+                return  Response({"error":{"code": "invalid_email", "message":"incorrect email id provided"}}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        except (requests.RequestException, ValueError):
+            return  Response({"error":{"code":"mail_reputation_server_not_reachable", "message":"email validation service unavailable"}}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
     userObjectSerial   = userSerializer(userObj, data = request.data, partial=True)
     if userObjectSerial.is_valid():
         userObjectSerial.save()
-        return Response({"message": f"user {request.user.get_username()} updated successfully!"}, status=status.HTTP_202_ACCEPTED)
-    return Response({"error": userObjectSerial.errors}, status=status.HTTP_400_BAD_REQUEST)
+        if not (profile_picture_url is None or profile_picture_url == ''):
+            object_key = profile_picture_url.split("GamesHubMedia/")[-1]
+            delete_from_supabase(object_key)
+
+        return Response({"message": "user updated successfully!"}, status=status.HTTP_202_ACCEPTED)
+    
+    return Response({"error":{"code": "validation_error", "message": "invalid input data", "details": userObjectSerial.errors}}, status=status.HTTP_400_BAD_REQUEST)
+
 
 @recover_user_schema
 @api_view(["POST"])
 def recover_user(request):
+    username = request.data.get("username")
+    password = request.data.get("password")
+
+    if username is None or username == '':
+        return Response({"error": {"code":"not_null_constraint", "message":"username cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+
+
     if "OTP" in request.data:
         otp      = request.data.get("OTP")
         try:
-            userObj  = User.objects.get(username = request.data.get("username"))
-            otpObj   = OTP.objects.get(account = request.data.get("username"))
+            userObj  = User.objects.get(username__iexact = username)
+
+            try:
+                otpObj   = OTP.objects.get(account = username)
+            except OTP.DoesNotExist:
+                return Response({"error":{"code":"otp_not_found", "message":"OTP not generated for this user"}}, status=status.HTTP_404_NOT_FOUND)
+    
             gen_otp, time_gen = otpObj.get_details()
 
-            if int(otp) == gen_otp and (time_gen + 300 >= int(time.time())):
-                if check_password(request.data.get("password"), userObj.get_password()):
+            if secrets.compare_digest(str(otp), str(gen_otp)) and (time_gen + 300 >= int(time.time())):
+                if password is None or password == '':
+                    return Response({"error": {"code":"not_null_constraint", "message":"password cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+
+                if check_password(password, userObj.get_password()):
                     userObj.change_status()
                     userObj.save()
                     otpObj.delete()
+                    email_id = userObj.get_email()
 
-                    Subject    = 'GamesHub Account Recovery'
-                    message    = f'Your account <b>{request.data.get("username")}</b> recovered successfully!'
+                    Subject    = 'GamesHub Account Recovery Confirmation'
+                    message    = account_recovery_success_email({"username":userObj.get_username()})
                     recepients = [email_id]
 
-                    mail_result, message_response = mail_service(Subject, message, recepients)
+                    mail_result, _ = mail_service(Subject, message, recepients)
 
                     if not mail_result:
-                        Response({"errors":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                        return Response({"error":{"code":"mailer_api_failed", "message":"mailer service failed"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-                    return Response({"message": f"account recovery successfull for {request.data.get("username")}"}, status=status.HTTP_202_ACCEPTED)
+                    return Response({"message": f"account recovery successful"}, status=status.HTTP_202_ACCEPTED)
                 else:
-                    return Response({"message": f"Incorrect password for account {request.data.get("username")}"}, status=status.HTTP_400_BAD_REQUEST)            
+                    return Response({"error":{"code":"invalid_credentials", "message":"incorrect password provided"}}, status=status.HTTP_400_BAD_REQUEST)
             else:
-                return Response({"message": "OTP either expired or incorrect"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error":{"code":"otp_invalid_or_expired","message":"OTP either expired or incorrect"}}, status=status.HTTP_400_BAD_REQUEST)
 
 
-        except Exception as e:
-            print(e)
-            return Response({"message": "Incorrect username entered or OTP not generated for this user"}, status=status.HTTP_400_BAD_REQUEST)
-
+        except User.DoesNotExist:
+            return Response({"error":{"code":"username_not_found", "message":"requested username not found"}}, status=status.HTTP_404_NOT_FOUND)
+    
     else:
         try:
-            userObj  = User.objects.get(username = request.data.get("username"))
+            userObj  = User.objects.get(username__iexact = username)
             email_id = userObj.get_email()
-            otp_num  = random.randint(1000, 9999)
 
-            if OTP.objects.filter(account = request.data.get("username")).exists():
-                otpObj   = OTP.objects.get(account = request.data.get("username"))
-                otpObj.set_details(otp_num, time.time())
-            else:    
-                otpObj   = OTP(otp=otp_num, account = request.data.get("username"), time = time.time())
+            otp_num  = secrets.randbelow(900000) + 100000
+
+            otpObj, _ = OTP.objects.get_or_create(account=username)
+            otpObj.set_details(otp_num, time.time())
             otpObj.save()
 
             Subject    = 'GamesHub Account Recovery'
-            message    = f'Your otp to recover account <b>{request.data.get("username")}</b> is <b>{otp_num}</b>'
+            message    = recover_account_email({"username":userObj.get_username(), "otp_num":otp_num})
             recepients = [email_id]
 
-            mail_result, message_response = mail_service(Subject, message, recepients)
+            mail_result, _ = mail_service(Subject, message, recepients)
 
             if not mail_result:
-                Response({"errors":"Mailer job failed!"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({"error":{"code":"mailer_api_failed", "message":"mailer service failed"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            return Response({"message":f"otp sent to {email_id} for account recovery for user account {request.data.get("username")}"}, status=status.HTTP_201_CREATED)
-        except Exception as e:
-            print(e)
-            return Response({"message":f"Incorrect Username {request.data.get("username")}"}, status=status.HTTP_400_BAD_REQUEST)
-
+            return Response({"message":f"OTP sent successfully"}, status=status.HTTP_201_CREATED)
+        
+        except User.DoesNotExist:
+            return Response({"error":{"code":"username_not_found", "message":"requested username not found"}}, status=status.HTTP_404_NOT_FOUND)

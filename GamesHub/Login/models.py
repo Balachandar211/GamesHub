@@ -20,6 +20,9 @@ class AppUser(AbstractUser):
             return result["signedURL"]
         return None
     
+    def get_profilePicture_url(self):
+        return self.profilePicture
+
     def get_password(self):
         return self.password
     
@@ -34,9 +37,9 @@ class AppUser(AbstractUser):
 
     
 class OTP(models.Model):
-    otp     = models.IntegerField()
+    otp     = models.IntegerField(null=True, default=None, blank=True)
     account = models.CharField(max_length=128)
-    time    = models.IntegerField()
+    time    = models.IntegerField(null=True, default=None, blank=True)
 
     def get_details(self):
         return self.otp, self.time

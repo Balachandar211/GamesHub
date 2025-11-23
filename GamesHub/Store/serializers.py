@@ -36,38 +36,89 @@ class gamesSerializer(ModelSerializer):
         return obj.get_cover_picture()
 
 class gamesSerializerSimplified(ModelSerializer):
-    price = serializers.SerializerMethodField()
+    price             = serializers.SerializerMethodField()
+    cover_picture_url = serializers.SerializerMethodField()
 
     class Meta:
         model  = Game
-        fields = ('id', 'name', 'developer', 'price')
+        fields = ('id', 'name', 'developer', 'price', 'cover_picture_url')
     
     def get_price(self, obj):
         return obj.get_actual_price()
 
+    def get_cover_picture_url(self, obj):
+        return obj.get_cover_picture()
 
-class cartSerializer(ModelSerializer):
-    user = serializers.SerializerMethodField()
-    games = gamesSerializerSimplified(many=True)
-
+class CartSerializer(ModelSerializer):
+    games  = serializers.PrimaryKeyRelatedField(many=True, queryset = Game.objects.all())
+    user   = serializers.SerializerMethodField(read_only=True)
+    action = serializers.CharField(default = None, write_only = True)
+    
     class Meta:
         model = Cart
-        fields = ['user', 'games']
+        fields = ['user', 'games', 'action']
+        read_only_fields = ["user"]
 
+    def create(self, validated_data):
+        validated_data["user"] = self.context["request"].user
+        validated_data.pop("action", None)
+        return super().create(validated_data)
+    
+    def update(self, instance, validated_data):
+        if "action" in validated_data:
+            if "add" == validated_data["action"]:
+                instance.games.add(*validated_data["games"])
+            if "remove" == validated_data["action"]:
+                instance.games.remove(*validated_data["games"])
+            
+            validated_data.pop("games", None)
+            validated_data.pop("action", None)
+
+        return super().update(instance, validated_data)
+    
     def get_user(self, obj):
         return obj.user.get_username()
 
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        rep['games'] = gamesSerializerSimplified(instance.games.all(), many=True).data
+        return rep
     
-class wishlistSerializer(ModelSerializer):
-    user = serializers.SerializerMethodField()
-    games = gamesSerializerSimplified(many=True)
-
+class WishlistSerializer(ModelSerializer):
+    games  = serializers.PrimaryKeyRelatedField(many=True, queryset = Game.objects.all())
+    user   = serializers.SerializerMethodField(read_only=True)
+    action = serializers.CharField(default = None, write_only = True)
+    
     class Meta:
         model = Wishlist
-        fields = ['user', 'games']
+        fields = ['user', 'games', 'action']
+        read_only_fields = ["user"]
 
+    def create(self, validated_data):
+        validated_data["user"] = self.context["request"].user
+        validated_data.pop("action", None)
+        return super().create(validated_data)
+    
+    def update(self, instance, validated_data):
+        if "action" in validated_data:
+            if "add" == validated_data["action"]:
+                instance.games.add(*validated_data["games"])
+            if "remove" == validated_data["action"]:
+                instance.games.remove(*validated_data["games"])
+            
+            validated_data.pop("games", None)
+            validated_data.pop("action", None)
+
+        return super().update(instance, validated_data)
+    
     def get_user(self, obj):
         return obj.user.get_username()
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        rep['games'] = gamesSerializerSimplified(instance.games.all(), many=True).data
+        return rep
+
 
 
 class GameMediaSerializer(ModelSerializer):

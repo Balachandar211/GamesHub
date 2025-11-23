@@ -1,6 +1,7 @@
 from rest_framework.serializers import ModelSerializer
 from .models import GameInteraction
 from rest_framework import serializers
+from Store.serializers import gamesSerializerSimplified
 
 class GameInteractionSerializer(ModelSerializer):
     class Meta:
@@ -15,10 +16,12 @@ class GameInteractionSerializer(ModelSerializer):
     
 class GameInteractionSerializerSimplified(ModelSerializer):
     user   = serializers.SerializerMethodField()
+    game   = gamesSerializerSimplified(read_only=True)
 
     class Meta:
         model = GameInteraction
-        fields = ('user', 'comment', 'rating')
+        fields = ('user', 'game', 'comment', 'rating')
 
     def get_user(self, obj):
         return obj.user.get_username()
+    
