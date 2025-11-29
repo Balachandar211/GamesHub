@@ -24,7 +24,6 @@ def monitor_1(request):
 def monitor_2(request):
     return HttpResponse("Monitor 2 good")
 
-
 def supabase_awake_upload(request):
     content   = ".txt file to make supabase always available"
     file      = BytesIO(content.encode("utf-8"))

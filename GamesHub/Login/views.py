@@ -3,7 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from .models import OTP
 from .serializers import userSerializer
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser
+from rest_framework.parsers import MultiPartParser, JSONParser
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 import random
@@ -28,7 +28,7 @@ EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
 
 @signup_schema
 @api_view(["POST"])
-@parser_classes([MultiPartParser])
+@parser_classes([MultiPartParser, JSONParser])
 def SignUp(request):
     if request.data.get("username") is None or request.data.get("username") == '':
         return Response({"error": {"code":"not_null_constraint", "message":"username cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
@@ -38,6 +38,16 @@ def SignUp(request):
 
     if request.data.get("password") is None or request.data.get("password") == '':
         return Response({"error": {"code":"not_null_constraint", "message":"password cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+
+    allowed_keys = ['username', 'email', 'password', 'first_name', 'last_name', 'profilePicture', 'email', 'phoneNumber']
+
+    if not set(request.data.keys()).issubset(allowed_keys):
+        unexpected = set(request.data.keys()) - set(allowed_keys)
+        return Response({"error": {"code":"forbidden_keys", "message":f"unexpected keys {unexpected}"}}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if request.content_type == "application/json" and request.data.get("profilePicture"):
+                    return Response({"error":{"code":"incorrect_parsing_type", "message":"please use multipart parser for profilePicture file upload"}}, status=status.HTTP_400_BAD_REQUEST)
+
 
     # API to check if email ID provided is valid
     try:
@@ -350,7 +360,7 @@ def delete_user(request):
 @update_user_schema
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated])
-@parser_classes([MultiPartParser])
+@parser_classes([MultiPartParser, JSONParser])
 def update_user(request):
     userObj            = request.user
     if request.data.get("password") is not None:
@@ -362,6 +372,9 @@ def update_user(request):
         unexpected = set(request.data.keys()) - set(allowed_keys)
         return Response({"error": {"code":"forbidden_keys", "message":f"unexpected keys {unexpected}"}}, status=status.HTTP_400_BAD_REQUEST)
     
+    if request.content_type == "application/json" and request.data.get("profilePicture"):
+        return Response({"error":{"code":"incorrect_parsing_type", "message":"please use multipart parser for profilePicture file upload"}}, status=status.HTTP_400_BAD_REQUEST)
+
     if "profilePicture" in request.data:
         profile_picture_url = userObj.get_profilePicture_url()
     else:
@@ -379,15 +392,19 @@ def update_user(request):
         except (requests.RequestException, ValueError):
             return  Response({"error":{"code":"mail_reputation_server_not_reachable", "message":"email validation service unavailable"}}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-    userObjectSerial   = userSerializer(userObj, data = request.data, partial=True)
-    if userObjectSerial.is_valid():
-        userObjectSerial.save()
-        if not (profile_picture_url is None or profile_picture_url == ''):
-            object_key = profile_picture_url.split("GamesHubMedia/")[-1]
-            delete_from_supabase(object_key)
+    try:
+        userObjectSerial   = userSerializer(userObj, data = request.data, partial=True)
+        if userObjectSerial.is_valid():
+            userObjectSerial.save()
+            if not (profile_picture_url is None or profile_picture_url == ''):
+                object_key = profile_picture_url.split("GamesHubMedia/")[-1]
+                delete_from_supabase(object_key)
 
-        return Response({"message": "user updated successfully!"}, status=status.HTTP_202_ACCEPTED)
-    
+            return Response({"message": "user updated successfully!"}, status=status.HTTP_202_ACCEPTED)
+    except Exception as e:
+        return  Response({"error":{"code":"user_update_failed", "message":"user object update failed"}}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        
     return Response({"error":{"code": "validation_error", "message": "invalid input data", "details": userObjectSerial.errors}}, status=status.HTTP_400_BAD_REQUEST)
 
 

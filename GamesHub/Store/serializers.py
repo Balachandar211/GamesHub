@@ -125,7 +125,7 @@ class GameMediaSerializer(ModelSerializer):
     signed_url = serializers.SerializerMethodField()
     class Meta:
         model = GamesMedia
-        fields = ('media_type', 'signed_url')
+        fields = ('id', 'media_type', 'signed_url')
 
     def get_signed_url(self, obj):
         if obj.url is not None and obj.media_type != 2:

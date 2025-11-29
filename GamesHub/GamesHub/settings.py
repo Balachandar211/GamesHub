@@ -170,7 +170,7 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-USER_RECOVERABLE_TIME = timedelta(minutes=3)
+USER_RECOVERABLE_TIME = timedelta(days=30)
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'

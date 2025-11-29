@@ -15,6 +15,7 @@ from utills.email_helper import game_bought_details
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db import IntegrityError
+from rest_framework.exceptions import UnsupportedMediaType
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -27,7 +28,6 @@ def purchase(request):
     if not isinstance(game_ids, list):
         return Response({"error": {"code":"incorrect_datatype", "message":"games should be passed as a list"}}, status=status.HTTP_400_BAD_REQUEST)
     
-
     to_buy        = {}
     na_list       = {}
     total_price   = 0
@@ -47,6 +47,9 @@ def purchase(request):
             na_list[id]  = "Game not available enter valid id"
         except (ValueError, ValidationError):
             na_list[id]  = "Game not available enter valid id with correct format"
+        except UnsupportedMediaType as e:
+            return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+        
         except Exception:
             return Response({"error":{"code":"purchase_section_fail", "message":"errors in purchase section"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
      
@@ -101,6 +104,8 @@ def buy_atomic(request):
             na_list[id]  = "Game not available enter valid id"
         except (ValueError, ValidationError):
             na_list[id]  = "Game not available enter valid id with correct format"
+        except UnsupportedMediaType as e:
+            return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         except Exception:
             exception_500 = True
     
@@ -182,7 +187,9 @@ def games_detail(request, pk):
         gameSerialData = gamesSerializer(game)
         gameData       = gameSerialData.data
     except Game.DoesNotExist:
-        return Response({"error": {"code":"do_not_exist", "message":"game object doesn't exist"}}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": {"code":"do_not_exist", "message":"game object doesn't exist"}}, status=status.HTTP_404_NOT_FOUND)
+    except UnsupportedMediaType as e:
+        return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         
     except Exception as e:
         return Response({"error":{"code":"game_detail_failed", "message":"please try back later"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -215,6 +222,9 @@ def comment(request, pk):
             gameInterationSerial.save()
             return Response({"message":"Comment saved successfully!"}, status=status.HTTP_202_ACCEPTED)
         return Response({"errors":{"code":"validation_error", "details":gameInterationSerial.errors}}, status=status.HTTP_400_BAD_REQUEST)
+    except UnsupportedMediaType as e:
+        return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+        
     except Exception:
         return Response({"error":{"code":"comment_section_fail", "message":"errors in comment section"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
        

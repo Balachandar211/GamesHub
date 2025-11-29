@@ -6,25 +6,26 @@ from django.utils import timezone
 from Store.models import Game
 from django.contrib.auth import get_user_model
 from GamesHub import settings
+from .email_helper import promotional_email, account_deletion_confirmation_email
+from datetime import date
 User = get_user_model()
 
 @app.task(name='send_daily_promotional_email')
 def send_daily_promotional_email():
-    userObjs = User.objects.all()
+    userObjs = User.objects.filter(wishlist__isnull=False)
+    
     for inv_user in userObjs:
         user_name = inv_user.get_username()
         email     = inv_user.get_email()
-        message   = ""
-        gameObjs = Game.objects.filter(wishlist__user=inv_user)
-        for game in gameObjs:
-            if game.get_discount() != 0:
-                message += "&#x2022; <b>" + game.get_name() + "</b> - now at Rs <b>" + str(game.get_actual_price()) + "</b> (Save " + str(game.get_discount()) + "%)" + "<br>"
+        gameObjs = Game.objects.filter(wishlist__user=inv_user, discount__gt = 0 )
         
-        if message != "":
-            message = f"<b>Hey {user_name} &#128075;</b><br><br>Your wishlist just got hotter! &#128293; Check out these epic deals:<br><br>" + message + "<br>Don’t miss out — these prices won’t last forever!<br><br>Cheers<br>Team GamesHub &#127918;"
+        if gameObjs.exists():
+            message   = promotional_email({"username": user_name, "gameObjs": gameObjs})
+            mail_result, _ = mail_service(Subject="Items from your wishlist on Sale!", message=message, recepients=[email])
             
-            result, _ = mail_service(Subject="Items from your wishlist on Sale!", message=message, recepients=[email])
-            
+            if not mail_result:
+                return "mailer service failed"
+
     return "Promotional mails sent"
 
 @app.task(name='delete_expired_access_tokens')
@@ -46,6 +47,14 @@ def delete_deleted_users():
     timeLine      = timezone.localtime() - settings.USER_RECOVERABLE_TIME
     for inactiveUser in inactiveUsers:
         if inactiveUser.last_login and inactiveUser.last_login <= timeLine:
+            user_name = inactiveUser.get_username()
+            email     = inactiveUser.get_email()
             inactiveUser.delete()
+            message   = account_deletion_confirmation_email({"user_name": user_name, "deletion_date": date.today()})
+
+            mail_result, _ = mail_service(Subject="Account Deletion Notice", message=message, recepients=[email])
+
+            if not mail_result:
+                return "mailer service failed"
     
     return "Deleted deleted users of more than 30 days"

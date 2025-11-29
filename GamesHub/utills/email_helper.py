@@ -26,3 +26,9 @@ def recoverable_deletion_confirmation(context):
 
 def game_bought_details(context):
     return render_to_string("games_bought_details.html", context=context)
+
+def promotional_email(context):
+    return render_to_string("promotional.html", context=context)
+
+def account_deletion_confirmation_email(context):
+    return render_to_string("account_deletion_confirmation.html", context=context)

@@ -10,29 +10,38 @@ from django.db import transaction
 
 
 # Microservice for Search
-def search(request):
+def search(request, game_ids):
+    path_key = request.path
+
     paginator = LimitOffsetPagination()
     
-    cached_vals = cache.get("CACHED_GAMES")
-    
-    if not request.GET and cached_vals:
+    cached_vals = cache.get(path_key + "CACHED_GAMES")
+
+    if not request.GET and cached_vals and not game_ids:
         cache_vals = cached_vals
     elif not request.GET and not cached_vals:
-        gameObjs = Game.objects.all().order_by('id')
+        if game_ids is None:
+            gameObjs = Game.objects.all().order_by('id')
+        else:
+            gameObjs = Game.objects.filter(id__in = game_ids).order_by('id')
         paginated_games = paginator.paginate_queryset(gameObjs, request)
         gamesSerial = gamesSerializer(paginated_games, many=True)
         gamesSerial = gamesSerial.data
         cache_vals  = gamesSerial, paginator.get_next_link(), paginator.get_previous_link(), paginator.count
-        cache.set("CACHED_GAMES", cache_vals, timeout=3600)
+        if not game_ids:
+            cache.set(path_key + "CACHED_GAMES", cache_vals, timeout=3600)
     else:
         query_params = request.GET.dict()
-        sorted_pairs = sorted(tuple(query_params.items()), key=lambda x: x[1].lower())
-        cached_vals = cache.get(sorted_pairs)
+        sorted_pairs = str(sorted(tuple(query_params.items()), key=lambda x: x[1].lower()))
+        cached_vals = cache.get(path_key + sorted_pairs)
 
         if cached_vals:
             cache_vals = cached_vals
         else:
             filters = Q()
+
+            if game_ids:
+                filter &= Q(id__in = game_ids)
 
             if name := request.query_params.get('name'):
                 filters &= Q(name__icontains = name.strip())
@@ -66,9 +75,10 @@ def search(request):
             paginated_games = paginator.paginate_queryset(gameObjs, request)
             gamesSerial = gamesSerializer(paginated_games, many=True)
             gamesSerial = gamesSerial.data
-            sorted_pairs = sorted(tuple(query_params.items()), key=lambda x: x[1].lower())
+            sorted_pairs = str(sorted(tuple(query_params.items()), key=lambda x: x[1].lower()))
             cache_vals  = gamesSerial, paginator.get_next_link(), paginator.get_previous_link(), paginator.count
-            cache.set(sorted_pairs, cache_vals, timeout=3600)
+            if not game_ids:
+                cache.set(path_key + sorted_pairs, cache_vals, timeout=3600)
 
     return cache_vals
 

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>GamesHub Wishlist Deals</title>
+  </head>
+  <body>
+    Hey <b>{{ username }}</b> &#128075;
+
+    <p>
+      Great news — your wishlist just lit up with some sizzling discounts &#128293;.  
+      These epic deals are waiting for you, and they won’t last long!
+    </p>
+
+    <ul>
+      {% for game in gameObjs %}
+      <li>
+        <b>{{ game.get_name }}</b> — now only Rs <b>{{ game.get_actual_price }}</b>  
+        <em>(Save {{ game.get_discount }}%)</em>
+      </li>
+      {% endfor %}
+    </ul>
+
+    <p>
+      Don’t miss out — once these prices are gone, they’re gone for good.  
+      Grab your favorites before the clock runs out &#9200;.
+    </p>
+
+    <p>
+      Cheers,<br>
+      <b>Team GamesHub &#127918;</b>
+    </p>
+  </body>
+</html>

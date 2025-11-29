@@ -63,6 +63,9 @@ class GamesMedia(models.Model):
     media_type     = models.PositiveSmallIntegerField(default= 0, choices=MEDIA_CHOICES, null=True, blank=True) 
     url            = models.URLField(null=True, default=None, blank=True)
 
+    def __str__(self):
+        return f"GameMedia for {self.game.get_name()}"
+
 class Cart(models.Model):
     user          = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
     games         = models.ManyToManyField(Game)
