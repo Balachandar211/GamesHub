@@ -32,3 +32,6 @@ def promotional_email(context):
 
 def account_deletion_confirmation_email(context):
     return render_to_string("account_deletion_confirmation.html", context=context)
+
+def validate_email_email(context):
+    return render_to_string("validate_email.html", context=context)

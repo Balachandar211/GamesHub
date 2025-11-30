@@ -1,6 +1,7 @@
 
 from django.urls import path
-from .views import SignUp, Login, Forgot_Password, extendSession, logout, delete_user, update_user, recover_user
+from .views import SignUp, Login, Forgot_Password, extendSession, logout, delete_user, update_user, recover_user, profile, validate_email, validate_email_token
+from django.urls import re_path
 
 urlpatterns = [
     path('signup', SignUp),
@@ -10,5 +11,8 @@ urlpatterns = [
     path('session/logout', logout),
     path('delete_user', delete_user),
     path('update_user', update_user),
-    path('recover_user', recover_user)
+    path('recover_user', recover_user),
+    path('profile', profile),
+    path('validate_email', validate_email),
+    re_path(r"^validate/(?P<token>.+)$", validate_email_token)
 ]

@@ -1,120 +1,265 @@
 from drf_spectacular.utils import extend_schema, OpenApiExample
 
+#Profile Schema
+profile_schema = extend_schema(
+    summary="Get user profile",
+    description="""
+        Retrieves the authenticated user's profile details.
+
+        - Requires user to be authenticated (`IsAuthenticated`)
+        - Returns username, email, first name, last name, phone number, and profile picture
+        - Profile picture is returned as a signed URL (valid for 60 seconds) generated from Supabase storage
+    """,
+    request=None,  # GET endpoint, no request body
+    responses={
+        200: {
+            'type': 'application/json',
+            'properties': {
+                'message': {'type': 'string', 'description': 'Profile data retrieval success message'},
+                'details': {
+                    'type': 'object',
+                    'properties': {
+                        'username': {'type': 'string', 'description': 'User’s username'},
+                        'email': {'type': 'string', 'description': 'User’s email address'},
+                        'first_name': {'type': 'string', 'description': 'User’s first name'},
+                        'last_name': {'type': 'string', 'description': 'User’s last name'},
+                        'phoneNumber': {'type': 'string', 'description': 'User’s phone number'},
+                        'profilePicture': {
+                            'type': 'string',
+                            'description': 'Signed URL for profile picture (valid for 60 seconds)'
+                        }
+                    }
+                }
+            }
+        },
+        401: {
+            'type': 'application/json',
+            'properties': {
+                'detail': {'type': 'string', 'description': 'Authentication credentials were not provided or invalid'}
+            }
+        }
+    },
+    examples=[
+        OpenApiExample(
+            name='Profile Data Success',
+            value={
+                "message": "user profile data",
+                "details": {
+                    "username": "Batman",
+                    "email": "batman@gotham.com",
+                    "first_name": "Bruce",
+                    "last_name": "Wayne",
+                    "phoneNumber": "+919876543210",
+                    "profilePicture": "https://supabase.storage/GamesHubMedia/...signedURL..."
+                }
+            },
+            response_only=True,
+            status_codes=['200']
+        ),
+        OpenApiExample(
+            name='Unauthorized Access',
+            value={"detail": "Authentication credentials were not provided."},
+            response_only=True,
+            status_codes=['401']
+        )
+    ]
+)
+
+
 #Signup Schema
 signup_schema = extend_schema(
     summary="Register a new GamesHub user",
     description="""
-                Creates a new user account with profile picture, email validation, and welcome mailer.
+        Creates a new user account with optional profile picture, email validation, and welcome mailer.
 
-                - Validates email via AbstractAPI
-                - Sends branded welcome email on success
-                - Returns JWT access token and sets refresh token as secure cookie
-                """,
+        - Validates required fields (username, email, password)
+        - Rejects unexpected keys in request payload
+        - Validates email via AbstractAPI reputation service
+        - Ensures username uniqueness
+        - Sends branded welcome email on success
+        - Returns JWT access token and sets refresh token as secure cookie
+    """,
     request={
+        "application/json": {
+            "type": "object",
+            "properties": {
+                "username": {
+                    "type": "string",
+                    "description": "Unique username for login"
+                },
+                "password": {
+                    "type": "string",
+                    "format": "password",
+                    "description": "Secure password"
+                },
+                "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "User's email address"
+                },
+                "first_name": {
+                    "type": "string",
+                    "description": "User's first name"
+                },
+                "last_name": {
+                    "type": "string",
+                    "description": "User's last name"
+                },
+                "phoneNumber": {
+                    "type": "string",
+                    "pattern": "^\\+91\\d{10,10}$",
+                    "description": "Phone number in international format"
+                }
+            },
+            "required": ["username", "password", "email"]
+        },
         "multipart/form-data": {
             "type": "object",
             "properties": {
-                            "username": {
-                                "type": "string",
-                                "description": "Unique username for login"
-                            },
-                            "password": {
-                                "type": "string",
-                                "format": "password",
-                                "description": "Secure password"
-                            },
-                            "email": {
-                                "type": "string",
-                                "format": "email",
-                                "description": "User's email address"
-                            },
-                            "first_name": {
-                                "type": "string",
-                                "description": "User's first name"
-                            },
-                            "last_name": {
-                                "type": "string",
-                                "description": "User's last name"
-                            },
-                            "phoneNumber": {
-                                "type": "string",
-                                "pattern": "^\\+\\d{10,15}$",
-                                "description": "Phone number in international format"
-                            },
-                            "profilePicture": {
-                                "type": "string",
-                                "format": "binary",
-                                "description": "Profile picture file"
-                            }
+                "username": {
+                    "type": "string",
+                    "description": "Unique username for login"
+                },
+                "password": {
+                    "type": "string",
+                    "format": "password",
+                    "description": "Secure password"
+                },
+                "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "User's email address"
+                },
+                "first_name": {
+                    "type": "string",
+                    "description": "User's first name"
+                },
+                "last_name": {
+                    "type": "string",
+                    "description": "User's last name"
+                },
+                "phoneNumber": {
+                    "type": "string",
+                    "pattern": "^\\+\\d{10,15}$",
+                    "description": "Phone number in international format"
+                },
+                "profilePicture": {
+                    "type": "string",
+                    "format": "file",
+                    "description": "Profile picture file (multipart only)"
+                }
             },
             "required": ["username", "password", "email"]
-        }},
+        }
+    },
     responses={
         201: {
             'type': 'application/json',
             'properties': {
-                'message': {'type': 'string', 'description': 'User registration successfull message'},
-                'username': {'type': 'string', 'description': 'username created'},
-                'profile_picture': {'type': 'string', 'description': 'profile picture url'},
-                'Access_Token': {'type': 'string', 'description': 'Access Token for the session'}
+                'message': {'type': 'string', 'description': 'User registration success message'},
+                'user': {
+                    'type': 'object',
+                    'properties': {
+                        'username': {'type': 'string', 'description': 'Created username'},
+                        'profile_picture': {'type': 'string', 'description': 'Profile picture URL'}
+                    }
+                },
+                'access_token': {'type': 'string', 'description': 'JWT access token for the session'}
             }
         },
         400: {
             'type': 'application/json',
             'properties': {
-                'error': {'type': 'string', 'description': 'error details'}
+                'error': {'type': 'object'}
+            }
+        },
+        409: {
+            'type': 'application/json',
+            'properties': {
+                'error': {'type': 'object'}
+            }
+        },
+        422: {
+            'type': 'application/json',
+            'properties': {
+                'error': {'type': 'object'}
+            }
+        },
+        503: {
+            'type': 'application/json',
+            'properties': {
+                'error': {'type': 'object'}
             }
         },
         500: {
             'type': 'application/json',
             'properties': {
-                'error': {'type': 'string', 'description': 'server error'}
+                'error': {'type': 'object'}
             }
         }
     },
     examples=[
         OpenApiExample(
             name='User Registration Success',
-            value={"message": "User Batman added successfully", "username":"Batman", "profile_picture":"url", "Access_Token":"hgavhvsgga...."},
+            value={
+                "message": "User Batman added successfully",
+                "user": {"username": "Batman", "profile_picture": "url"},
+                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            },
             response_only=True,
-            status_codes=['200']
+            status_codes=['201']
         ),
         OpenApiExample(
-            name='Username already exist',
-            value={"message": "Username already Exists"},
-            response_only=True,
-            status_codes=['400']
-        ),
-        OpenApiExample(
-            name='Invalid email ID',
-            value={"error":"Incorrect email ID provided"},
+            name='Missing Required Field',
+            value={"error": {"code": "not_null_constraint", "message": "username cannot be none"}},
             response_only=True,
             status_codes=['400']
         ),
         OpenApiExample(
-            name='Validation errors',
-            value={"error":{"field":"error"}},
+            name='Unexpected Keys',
+            value={"error": {"code": "forbidden_keys", "message": "unexpected keys {'foo'}"}},
             response_only=True,
             status_codes=['400']
         ),
         OpenApiExample(
-            name='Internal server error',
-            value={"error":"Mailer job failed!"},
+            name='Invalid Email',
+            value={"error": {"code": "invalid_email", "message": "incorrect email id provided"}},
+            response_only=True,
+            status_codes=['422']
+        ),
+        OpenApiExample(
+            name='Username Already Exists',
+            value={"error": {"code": "username_integrity_error", "message": "username already exists"}},
+            response_only=True,
+            status_codes=['409']
+        ),
+        OpenApiExample(
+            name='Mailer Service Failed',
+            value={"error": {"code": "mailer_api_failed", "message": "mailer service failed"}},
             response_only=True,
             status_codes=['500']
+        ),
+        OpenApiExample(
+            name='Email Reputation Service Unavailable',
+            value={"error": {"code": "mail_reputation_server_not_reachable", "message": "email validation service unavailable"}},
+            response_only=True,
+            status_codes=['503']
         )
     ]
 )
+
 
 #Login Schema
 login_schema = extend_schema(
     summary="Login to GamesHub",
     description="""
-                    Authenticates a user and returns a JWT access token.
+        Authenticates a user with username and password.
 
-                    - Sets `Refresh_Token` as a secure HTTP-only cookie
-                    - Returns profile metadata on success
-                """,
+        - Validates required fields (username, password)
+        - Ensures user account is active
+        - Returns JWT access token and sets refresh token as secure cookie
+        - Updates last login timestamp
+    """,
     request={
         "application/json": {
             "type": "object",
@@ -134,347 +279,473 @@ login_schema = extend_schema(
     },
     responses={
         200: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "Login success message"
+            'type': 'application/json',
+            'properties': {
+                'message': {'type': 'string', 'description': 'Login success message'},
+                'user': {
+                    'type': 'object',
+                    'properties': {
+                        'username': {'type': 'string', 'description': 'Logged in username'},
+                        'profile_picture': {'type': 'string', 'description': 'Profile picture URL'}
+                    }
                 },
-                "username": {
-                    "type": "string",
-                    "description": "Logged-in username"
-                },
-                "profile_picture": {
-                    "type": "string",
-                    "description": "Profile picture URL"
-                },
-                "Access_Token": {
-                    "type": "string",
-                    "description": "JWT access token"
-                }
+                'access_token': {'type': 'string', 'description': 'JWT access token for the session'}
             }
         },
         400: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "Incorrect password or validation error"
+            'type': 'application/json',
+            'properties': {
+                'error': {
+                    'type': 'object',
+                    'properties': {
+                        'code': {'type': 'string', 'description': 'Error code'},
+                        'message': {'type': 'string', 'description': 'Error message'}
+                    }
                 }
             }
         },
         404: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "Username not found"
+            'type': 'application/json',
+            'properties': {
+                'error': {
+                    'type': 'object',
+                    'properties': {
+                        'code': {'type': 'string'},
+                        'message': {'type': 'string'}
+                    }
                 }
             }
         }
     },
     examples=[
         OpenApiExample(
-            name="Login request",
-            value={
-                "username": "ShinjoBlal",
-                "password": "WeRock"
-            },
-            request_only=True,
-            media_type="application/json"
-        ),
-        OpenApiExample(
-            name="Login success",
+            name='Login Success',
             value={
                 "message": "User Batman logged in",
-                "username": "Batman",
-                "profile_picture": "https://cdn.gameshub.com/profiles/batman.jpg",
-                "Access_Token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                "user": {"username": "Batman", "profile_picture": "url"},
+                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
             },
             response_only=True,
-            status_codes=["200"]
+            status_codes=['200']
         ),
         OpenApiExample(
-            name="Incorrect password",
-            value={
-                "message": "Incorrect password for user Batman"
-            },
+            name='Missing Username',
+            value={"error": {"code": "not_null_constraint", "message": "username cannot be none"}},
             response_only=True,
-            status_codes=["400"]
+            status_codes=['400']
         ),
         OpenApiExample(
-            name="Username not found",
-            value={
-                "message": "Username not found"
-            },
+            name='Missing Password',
+            value={"error": {"code": "not_null_constraint", "message": "password cannot be none"}},
             response_only=True,
-            status_codes=["404"]
+            status_codes=['400']
+        ),
+        OpenApiExample(
+            name='Inactive User',
+            value={"error": {"code": "recovery_needed", "message": "requested user is inactive please send a recovery request"}},
+            response_only=True,
+            status_codes=['400']
+        ),
+        OpenApiExample(
+            name='Invalid Credentials',
+            value={"error": {"code": "invalid_credentials", "message": "incorrect password for user"}},
+            response_only=True,
+            status_codes=['400']
+        ),
+        OpenApiExample(
+            name='Username Not Found',
+            value={"error": {"code": "username_not_found", "message": "requested username not found"}},
+            response_only=True,
+            status_codes=['404']
         )
     ]
 )
 
+
 #Extend session schema
 extend_session_schema = extend_schema(
-    summary="Refresh GamesHub session",
+    summary="Extend user session",
     description="""
-                    Refreshes the user's JWT access token using the secure `Refresh_Token` cookie.
+        Refreshes the user's session by rotating the refresh token and issuing a new access token.
 
-                    - Blacklists the previous access token and refresh token
-                    - Issues a new access token and refresh token
-                    - Sets `Refresh_Token` as a secure HTTP-only cookie
-                """,
-    request={},
+        - Requires user to be authenticated (`IsAuthenticated`)
+        - Reads refresh token from secure cookie
+        - Validates and blacklists the old access and refresh tokens
+        - Issues new refresh + access tokens
+        - Updates user's last login timestamp
+        - Sets new refresh token as secure cookie
+    """,
+    request={
+        "application/json": {
+            "type": "object",
+            "properties": {},
+            "description": "No body fields required — refresh token is read from cookie and access token from Authorization header"
+        }
+    },
     responses={
         200: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "Success message"
-                },
-                "Access_Token": {
-                    "type": "string",
-                    "description": "New JWT access token"
-                }
+            'type': 'application/json',
+            'properties': {
+                'message': {'type': 'string', 'description': 'Session extended successfully'},
+                'access_token': {'type': 'string', 'description': 'New JWT access token'}
             }
         },
         400: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "Missing refresh token cookie"
+            'type': 'application/json',
+            'properties': {
+                'error': {
+                    'type': 'object',
+                    'properties': {
+                        'code': {'type': 'string', 'description': 'Error code'},
+                        'message': {'type': 'string', 'description': 'Error message'}
+                    }
                 }
             }
         },
         401: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "Refresh token invalid or expired"
+            'type': 'application/json',
+            'properties': {
+                'error': {
+                    'type': 'object',
+                    'properties': {
+                        'code': {'type': 'string'},
+                        'message': {'type': 'string'}
+                    }
                 }
             }
         }
     },
     examples=[
         OpenApiExample(
-            name="Successful session extension",
+            name='Session Extended Successfully',
             value={
-                "message": "Access Token generated successfully",
-                "Access_Token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                "message": "access Token generated successfully",
+                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
             },
             response_only=True,
-            status_codes=["200"]
+            status_codes=['200']
         ),
         OpenApiExample(
-            name="Missing refresh token cookie",
-            value={
-                "message": "Refresh token cookie not found"
-            },
+            name='Missing Refresh Token Cookie',
+            value={"error": {"code": "refresh_token_not_found", "message": "refresh token cookie not found"}},
             response_only=True,
-            status_codes=["400"]
+            status_codes=['400']
         ),
         OpenApiExample(
-            name="Expired or invalid refresh token",
-            value={
-                "message": "Refresh token incorrect or expired"
-            },
+            name='Malformed Authorization Header',
+            value={"error": {"code": "invalid_authorization_header", "message": "authorization header malformed"}},
             response_only=True,
-            status_codes=["401"]
+            status_codes=['400']
+        ),
+        OpenApiExample(
+            name='Invalid or Expired Refresh Token',
+            value={"error": {"code": "invalid_refresh_token", "message": "refresh token incorrect or expired"}},
+            response_only=True,
+            status_codes=['401']
         )
     ]
 )
 
-update_user_schema = extend_schema(
-    summary="Update GamesHub user profile",
-    description="""
-                    Updates the authenticated user's profile fields.
 
-                    - Accepts `multipart/form-data` for image and text fields
-                    - Rejects password updates (use `forgot_password` endpoint instead)
-                    - Validates allowed keys: `first_name`, `last_name`, `profilePicture`, `email`, `phoneNumber`
-                    - Verifies email deliverability via AbstractAPI
-                """,
+update_user_schema = extend_schema(
+    summary="Update user profile",
+    description="""
+        Allows an authenticated user to update their profile details.
+
+        - Supports partial updates (PATCH)
+        - Rejects password updates (use forgot_password endpoint instead)
+        - Validates allowed keys: first_name, last_name, profilePicture, email, phoneNumber
+        - Rejects unexpected keys in request payload
+        - Validates email via AbstractAPI reputation service
+        - Deletes old profile picture from Supabase if replaced
+    """,
     request={
+        "application/json": {
+            "type": "object",
+            "properties": {
+                "first_name": {"type": "string", "description": "User's first name"},
+                "last_name": {"type": "string", "description": "User's last name"},
+                "email": {"type": "string", "format": "email", "description": "User's email address"},
+                "phoneNumber": {
+                    "type": "string",
+                    "pattern": "^\\+91\\d{10,10}$",
+                    "description": "Phone number in international format"
+                }
+            }
+        },
         "multipart/form-data": {
             "type": "object",
             "properties": {
-                "first_name": {
-                    "type": "string",
-                    "description": "User's first name"
-                },
-                "last_name": {
-                    "type": "string",
-                    "description": "User's last name"
-                },
-                "email": {
-                    "type": "string",
-                    "format": "email",
-                    "description": "User's email address"
-                },
+                "first_name": {"type": "string", "description": "User's first name"},
+                "last_name": {"type": "string", "description": "User's last name"},
+                "email": {"type": "string", "format": "email", "description": "User's email address"},
                 "phoneNumber": {
                     "type": "string",
-                    "pattern": "^\\+\\d{10,15}$",
+                    "pattern": "^\\+91\\d{10,10}$",
                     "description": "Phone number in international format"
                 },
                 "profilePicture": {
                     "type": "string",
-                    "format": "binary",
-                    "description": "Profile picture file"
+                    "format": "file",
+                    "description": "Profile picture file (multipart only)"
                 }
             }
         }
     },
     responses={
         202: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "Update success message"
-                }
+            'type': 'application/json',
+            'properties': {
+                'message': {'type': 'string', 'description': 'User updated successfully'}
             }
         },
         400: {
-            "type": "object",
-            "properties": {
-                "error": {
-                    "type": "string",
-                    "description": "Validation error, unexpected keys, or email failure"
-                }
+            'type': 'application/json',
+            'properties': {
+                'error': {'type': 'object'}
+            }
+        },
+        422: {
+            'type': 'application/json',
+            'properties': {
+                'error': {'type': 'object'}
+            }
+        },
+        503: {
+            'type': 'application/json',
+            'properties': {
+                'error': {'type': 'object'}
             }
         }
     },
     examples=[
         OpenApiExample(
-            name="Password update attempt",
-            value={
-                "error": "use forgot_password endpoint to update password"
-            },
+            name='User Updated Successfully',
+            value={"message": "user updated successfully!"},
             response_only=True,
-            status_codes=["400"]
+            status_codes=['202']
         ),
         OpenApiExample(
-            name="Unexpected keys",
-            value={
-                "error": "unexpected keys {'nickname'}"
-            },
+            name='Password Update Attempt',
+            value={"error": {"code": "incorrect_end_point", "message": "use forgot_password endpoint to update password"}},
             response_only=True,
-            status_codes=["400"]
+            status_codes=['400']
         ),
         OpenApiExample(
-            name="Invalid email",
-            value={
-                "error": "Incorrect email ID provided"
-            },
+            name='Unexpected Keys',
+            value={"error": {"code": "forbidden_keys", "message": "unexpected keys {'foo'}"}},
             response_only=True,
-            status_codes=["400"]
+            status_codes=['400']
         ),
         OpenApiExample(
-            name="Successful update response",
-            value={
-                "message": "user ShinjoBlal updated successfully!"
-            },
+            name='Incorrect Parsing Type',
+            value={"error": {"code": "incorrect_parsing_type", "message": "please use multipart parser for profilePicture file upload"}},
             response_only=True,
-            status_codes=["202"]
+            status_codes=['400']
+        ),
+        OpenApiExample(
+            name='Invalid Email',
+            value={"error": {"code": "invalid_email", "message": "incorrect email id provided"}},
+            response_only=True,
+            status_codes=['422']
+        ),
+        OpenApiExample(
+            name='Email Reputation Service Unavailable',
+            value={"error": {"code": "mail_reputation_server_not_reachable", "message": "email validation service unavailable"}},
+            response_only=True,
+            status_codes=['503']
+        ),
+        OpenApiExample(
+            name='User Update Failed',
+            value={"error": {"code": "user_update_failed", "message": "user object update failed"}},
+            response_only=True,
+            status_codes=['503']
+        ),
+        OpenApiExample(
+            name='Validation Error',
+            value={"error": {"code": "validation_error", "message": "invalid input data", "details": {"email": ["Invalid format"]}}},
+            response_only=True,
+            status_codes=['400']
         )
     ]
 )
 
-logout_session_schema = extend_schema(
-    summary="Logout from GamesHub",
+# Validate email schema
+validate_email_schema = extend_schema(
+    summary="Send email validation link",
     description="""
-                    Logs out the authenticated user by blacklisting the access token and deleting the refresh token cookie.
+        Sends a validation email to the authenticated user.
 
-                    - Requires `Refresh_Token` cookie and `Authorization` header
-                    - Blacklists both access and refresh tokens
-                    - Deletes `Refresh_Token` cookie from `/user/session/`
-                """,
-    request={},
+        - Requires user to be authenticated (`IsAuthenticated`)
+        - Generates a signed token containing the username
+        - Constructs a verification URL using the signed token
+        - Sends an email with the verification link to the user's registered email address
+        - Returns success message if mailer service succeeds
+    """,
+    request=None,  # GET endpoint, no request body
     responses={
-        205: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "Logout success message"
-                }
+        200: {
+            'type': 'application/json',
+            'properties': {
+                'message': {'type': 'string', 'description': 'Validation email sent successfully'}
             }
         },
-        400: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "Missing refresh token cookie"
+        500: {
+            'type': 'application/json',
+            'properties': {
+                'error': {
+                    'type': 'object',
+                    'properties': {
+                        'code': {'type': 'string', 'description': 'Error code'},
+                        'message': {'type': 'string', 'description': 'Error message'}
+                    }
                 }
             }
         },
         401: {
+            'type': 'application/json',
+            'properties': {
+                'detail': {'type': 'string', 'description': 'Authentication credentials were not provided or invalid'}
+            }
+        }
+    },
+    examples=[
+        OpenApiExample(
+            name='Validation Email Sent',
+            value={"message": "validation email sent successfully"},
+            response_only=True,
+            status_codes=['200']
+        ),
+        OpenApiExample(
+            name='Mailer Service Failed',
+            value={"error": {"code": "mailer_api_failed", "message": "mailer service failed"}},
+            response_only=True,
+            status_codes=['500']
+        ),
+        OpenApiExample(
+            name='Unauthorized Access',
+            value={"detail": "Authentication credentials were not provided."},
+            response_only=True,
+            status_codes=['401']
+        )
+    ]
+)
+
+
+# Logout Schema
+logout_session_schema = extend_schema(
+    summary="Logout user",
+    description="""
+        Logs out an authenticated user by blacklisting the current access and refresh tokens.
+
+        - Requires user to be authenticated (`IsAuthenticated`)
+        - Reads refresh token from secure cookie
+        - Reads access token from Authorization header
+        - Blacklists both tokens to prevent reuse
+        - Deletes refresh token cookie
+        - Returns confirmation message
+    """,
+    request={
+        "application/json": {
             "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "Refresh token invalid or expired"
+            "properties": {},
+            "description": "No body fields required — refresh token is read from cookie and access token from Authorization header"
+        }
+    },
+    responses={
+        205: {
+            'type': 'application/json',
+            'properties': {
+                'message': {'type': 'string', 'description': 'Logout success message'}
+            }
+        },
+        400: {
+            'type': 'application/json',
+            'properties': {
+                'error': {
+                    'type': 'object',
+                    'properties': {
+                        'code': {'type': 'string', 'description': 'Error code'},
+                        'message': {'type': 'string', 'description': 'Error message'}
+                    }
+                }
+            }
+        },
+        401: {
+            'type': 'application/json',
+            'properties': {
+                'error': {
+                    'type': 'object',
+                    'properties': {
+                        'code': {'type': 'string'},
+                        'message': {'type': 'string'}
+                    }
                 }
             }
         }
     },
     examples=[
         OpenApiExample(
-            name="Successful logout",
-            value={
-                "message": "user ShinjoBlal logged out successfully!"
-            },
+            name='Logout Success',
+            value={"message": "user Batman logged out successfully!"},
             response_only=True,
-            status_codes=["205"]
+            status_codes=['205']
         ),
         OpenApiExample(
-            name="Missing refresh token cookie",
-            value={
-                "message": "Refresh token cookie not found"
-            },
+            name='Missing Refresh Token Cookie',
+            value={"error": {"code": "refresh_token_not_found", "message": "refresh token cookie not found"}},
             response_only=True,
-            status_codes=["400"]
+            status_codes=['400']
         ),
         OpenApiExample(
-            name="Expired or invalid refresh token",
-            value={
-                "message": "Refresh token incorrect or expired"
-            },
+            name='Malformed Authorization Header',
+            value={"error": {"code": "invalid_authorization_header", "message": "authorization header malformed"}},
             response_only=True,
-            status_codes=["401"]
+            status_codes=['400']
+        ),
+        OpenApiExample(
+            name='Invalid or Expired Refresh Token',
+            value={"error": {"code": "invalid_refresh_token", "message": "refresh token incorrect or expired"}},
+            response_only=True,
+            status_codes=['401']
         )
     ]
 )
 
-recover_user_schema = extend_schema(
-    summary="Recover GamesHub user account",
-    description="""
-                    Handles account recovery via OTP verification.
 
-                    - If `OTP` is not provided, sends a recovery OTP to the user's registered email
-                    - If `OTP` is provided, verifies it and restores account access
-                    - Sends branded recovery email on success
-                    - OTP expires after 5 minutes
-                """,
+recover_user_schema = extend_schema(
+    summary="Recover user account",
+    description="""
+        Handles account recovery in two steps:
+
+        1. **OTP Generation**  
+           - User provides username.  
+           - Generates a 6-digit OTP and sends it to the registered email.  
+           - Stores OTP with timestamp for validation.  
+
+        2. **Account Recovery Confirmation**  
+           - User provides username, OTP, and password.  
+           - Validates OTP (expires in 5 minutes).  
+           - Validates password against stored hash.  
+           - Reactivates user account and deletes OTP record.  
+           - Sends confirmation email.  
+    """,
     request={
         "application/json": {
             "type": "object",
             "properties": {
                 "username": {
                     "type": "string",
-                    "description": "Username of the account to recover"
-                },
-                "OTP": {
-                    "type": "integer",
-                    "description": "One-time password received via email"
+                    "description": "Registered username (required for both OTP generation and recovery)"
                 },
                 "password": {
                     "type": "string",
                     "format": "password",
-                    "description": "Account password for verification"
+                    "description": "New password (required only for recovery confirmation)"
+                },
+                "OTP": {
+                    "type": "string",
+                    "description": "One-time password sent to user's email (required only for recovery confirmation)"
                 }
             },
             "required": ["username"]
@@ -482,269 +753,243 @@ recover_user_schema = extend_schema(
     },
     responses={
         201: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "OTP sent message"
-                }
-            },
-            "required": ["message"]
+            'type': 'application/json',
+            'properties': {
+                'message': {'type': 'string', 'description': 'OTP sent successfully'}
+            }
         },
         202: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "Account recovery success message"
-                }
-            },
-            "required": ["message"]
+            'type': 'application/json',
+            'properties': {
+                'message': {'type': 'string', 'description': 'Account recovery successful'}
+            }
         },
         400: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "Validation error or incorrect credentials"
-                }
+            'type': 'application/json',
+            'properties': {
+                'error': {'type': 'object'}
+            }
+        },
+        404: {
+            'type': 'application/json',
+            'properties': {
+                'error': {'type': 'object'}
             }
         },
         500: {
-            "type": "object",
-            "properties": {
-                "errors": {
-                    "type": "string",
-                    "description": "Mailer job failure"
-                }
+            'type': 'application/json',
+            'properties': {
+                'error': {'type': 'object'}
             }
         }
     },
     examples=[
         OpenApiExample(
-            name="OTP request",
-            value={
-                "username": "ShinjoBlal"
-            },
-            request_only=True,
-            media_type="application/json"
-        ),
-        OpenApiExample(
-            name="OTP verification",
-            value={
-                "username": "ShinjoBlal",
-                "OTP": 1234,
-                "password": "hunter2"
-            },
-            request_only=True,
-            media_type="application/json"
-        ),
-        OpenApiExample(
-            name="OTP sent",
-            value={
-                "message": "otp sent to ShinjoBlal@example.com for account recovery for user account ShinjoBlal"
-            },
+            name='OTP Sent Successfully',
+            value={"message": "OTP sent successfully"},
             response_only=True,
-            status_codes=["201"]
+            status_codes=['201']
         ),
         OpenApiExample(
-            name="Successful recovery",
-            value={
-                "message": "account recovery successfull for ShinjoBlal"
-            },
+            name='Account Recovery Successful',
+            value={"message": "account recovery successful"},
             response_only=True,
-            status_codes=["202"]
+            status_codes=['202']
         ),
         OpenApiExample(
-            name="Incorrect password",
-            value={
-                "message": "Incorrect password for account ShinjoBlal"
-            },
+            name='Missing Username',
+            value={"error": {"code": "not_null_constraint", "message": "username cannot be none"}},
             response_only=True,
-            status_codes=["400"]
+            status_codes=['400']
         ),
         OpenApiExample(
-            name="OTP expired or incorrect",
-            value={
-                "message": "OTP either expired or incorrect"
-            },
+            name='Missing Password During Recovery',
+            value={"error": {"code": "not_null_constraint", "message": "password cannot be none"}},
             response_only=True,
-            status_codes=["400"]
+            status_codes=['400']
         ),
         OpenApiExample(
-            name="Invalid username or no OTP generated",
-            value={
-                "message": "Incorrect username entered or OTP not generated for this user"
-            },
+            name='Invalid Credentials',
+            value={"error": {"code": "invalid_credentials", "message": "incorrect password provided"}},
             response_only=True,
-            status_codes=["400"]
+            status_codes=['400']
         ),
         OpenApiExample(
-            name="Mailer failure",
-            value={
-                "errors": "Mailer job failed!"
-            },
+            name='OTP Invalid or Expired',
+            value={"error": {"code": "otp_invalid_or_expired", "message": "OTP either expired or incorrect"}},
             response_only=True,
-            status_codes=["500"]
+            status_codes=['400']
+        ),
+        OpenApiExample(
+            name='OTP Not Found',
+            value={"error": {"code": "otp_not_found", "message": "OTP not generated for this user"}},
+            response_only=True,
+            status_codes=['404']
+        ),
+        OpenApiExample(
+            name='Username Not Found',
+            value={"error": {"code": "username_not_found", "message": "requested username not found"}},
+            response_only=True,
+            status_codes=['404']
+        ),
+        OpenApiExample(
+            name='Mailer Service Failed',
+            value={"error": {"code": "mailer_api_failed", "message": "mailer service failed"}},
+            response_only=True,
+            status_codes=['500']
         )
     ]
 )
 
+
 delete_user_schema = extend_schema(
-    summary="Delete GamesHub user account",
+    summary="Delete user account",
     description="""
-                    Deletes the authenticated user's account via OTP verification.
+        Handles account deletion in two steps:
 
-                    - If `OTP` is not provided, sends a deletion OTP to the user's registered email
-                    - If `OTP` is provided:
-                        - If `delete_permanently = 1`, deletes the account permanently
-                        - If `delete_permanently = 0`, marks the account as recoverable for 30 days
-                    - Sends branded confirmation email on success
-                    - OTP expires after 5 minutes
+        1. **OTP Generation**  
+           - Authenticated user requests deletion without providing OTP.  
+           - Generates a 6-digit OTP and sends it to the registered email.  
+           - Stores OTP with timestamp for validation.  
 
-                    Request Body : {
-                        \"OTP\":\"String\":,
-                        \"password\":\"String\",
-                        \"delete_permanently\":\"0/1\"
-                    }
-
-                """,
-    request={},
+        2. **Account Deletion Confirmation**  
+           - User provides OTP (and password if permanent deletion).  
+           - Validates OTP (expires in 5 minutes).  
+           - If `delete_permanently` is true and password is correct → deletes account permanently.  
+           - Otherwise → marks account as deleted but recoverable within 30 days.  
+           - Sends confirmation email.  
+    """,
+    request={
+        "application/json": {
+            "type": "object",
+            "properties": {
+                "OTP": {
+                    "type": "string",
+                    "description": "One-time password sent to user's email (required for deletion confirmation)"
+                },
+                "delete_permanently": {
+                    "type": "boolean",
+                    "description": "Flag to permanently delete account (requires password)"
+                },
+                "password": {
+                    "type": "string",
+                    "format": "password",
+                    "description": "User's password (required only for permanent deletion)"
+                }
+            }
+        }
+    },
     responses={
         201: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "OTP sent message"
-                }
-            },
-            "required": ["message"]
+            'type': 'application/json',
+            'properties': {
+                'message': {'type': 'string', 'description': 'OTP sent successfully'}
+            }
         },
         204: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "Account deletion confirmation"
-                }
-            },
-            "required": ["message"]
+            'type': 'application/json',
+            'properties': {
+                'message': {'type': 'string', 'description': 'Account deleted successfully'}
+            }
         },
         400: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "Validation error or incorrect credentials"
-                }
+            'type': 'application/json',
+            'properties': {
+                'error': {'type': 'object'}
+            }
+        },
+        404: {
+            'type': 'application/json',
+            'properties': {
+                'error': {'type': 'object'}
             }
         },
         500: {
-            "type": "object",
-            "properties": {
-                "errors": {
-                    "type": "string",
-                    "description": "Mailer job failure"
-                }
+            'type': 'application/json',
+            'properties': {
+                'error': {'type': 'object'}
             }
         }
     },
     examples=[
         OpenApiExample(
-            name="Recoverable deletion",
-            value={
-                "OTP": 1234,
-                "delete_permanently": 0
-            },
-            request_only=True,
-            media_type="application/json"
+            name='OTP Sent Successfully',
+            value={"message": "otp sent successfully"},
+            response_only=True,
+            status_codes=['201']
         ),
         OpenApiExample(
-            name="OTP sent",
-            value={
-                "message": "OTP created successfully for account deletion for user ShinjoBlal"
-            },
+            name='Account Deleted Permanently',
+            value={"message": "user account deleted permanently"},
             response_only=True,
-            status_codes=["201"]
+            status_codes=['204']
         ),
         OpenApiExample(
-            name="Permanent deletion success",
-            value={
-                "message": "user account ShinjoBlal deleted permanently"
-            },
+            name='Account Deleted (Recoverable)',
+            value={"message": "user account deleted and can be recovered within 30 days"},
             response_only=True,
-            status_codes=["204"]
+            status_codes=['204']
         ),
         OpenApiExample(
-            name="Recoverable deletion success",
-            value={
-                "message": "user account ShinjoBlal deleted successfully and can be recovered within 30 days"
-            },
+            name='Missing OTP',
+            value={"error": {"code": "otp_not_found", "message": "OTP not generated for this user"}},
             response_only=True,
-            status_codes=["204"]
+            status_codes=['404']
         ),
         OpenApiExample(
-            name="Incorrect password",
-            value={
-                "message": "incorrect password for user account Batman"
-            },
+            name='Invalid or Expired OTP',
+            value={"error": {"code": "otp_invalid_or_expired", "message": "OTP either expired or incorrect"}},
             response_only=True,
-            status_codes=["400"]
+            status_codes=['400']
         ),
         OpenApiExample(
-            name="OTP expired or incorrect",
-            value={
-                "message": "OTP either expired or incorrect"
-            },
+            name='Invalid Credentials for Permanent Deletion',
+            value={"error": {"code": "invalid_credentials", "message": "incorrect password for user account"}},
             response_only=True,
-            status_codes=["400"]
+            status_codes=['400']
         ),
         OpenApiExample(
-            name="Invalid username or no OTP generated",
-            value={
-                "message": "Incorrect username entered or OTP not generated for this user"
-            },
+            name='Mailer Service Failed',
+            value={"error": {"code": "mailer_api_failed", "message": "mailer service failed"}},
             response_only=True,
-            status_codes=["400"]
-        ),
-        OpenApiExample(
-            name="Mailer failure",
-            value={
-                "errors": "Mailer job failed!"
-            },
-            response_only=True,
-            status_codes=["500"]
+            status_codes=['500']
         )
     ]
 )
 
 forgot_password_schema = extend_schema(
-    summary="Reset GamesHub account password",
+    summary="Forgot password / Reset user password",
     description="""
-                    Handles password reset via OTP verification.
+        Handles password reset in two steps:
 
-                    - If `OTP` is not provided, sends a password reset OTP to the user's registered email
-                    - If `OTP` is provided, verifies it and updates the password
-                    - OTP expires after 5 minutes
-                    - Sends branded confirmation email on success
-                """,
+        1. **OTP Generation**  
+           - User provides username.  
+           - Generates a 6-digit OTP and sends it to the registered email.  
+           - Stores OTP with timestamp for validation.  
+
+        2. **Password Reset Confirmation**  
+           - User provides username, OTP, and new password.  
+           - Validates OTP (expires in 5 minutes).  
+           - Updates user's password if OTP and credentials are valid.  
+           - Deletes OTP record after successful reset.  
+           - Sends confirmation email.  
+    """,
     request={
         "application/json": {
             "type": "object",
             "properties": {
                 "username": {
                     "type": "string",
-                    "description": "Username of the account to reset"
-                },
-                "OTP": {
-                    "type": "integer",
-                    "description": "One-time password received via email"
+                    "description": "Registered username (required for both OTP generation and reset)"
                 },
                 "password": {
                     "type": "string",
                     "format": "password",
-                    "description": "New password to set"
+                    "description": "New password (required only for reset confirmation)"
+                },
+                "OTP": {
+                    "type": "string",
+                    "description": "One-time password sent to user's email (required only for reset confirmation)"
                 }
             },
             "required": ["username"]
@@ -752,102 +997,84 @@ forgot_password_schema = extend_schema(
     },
     responses={
         201: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "OTP sent message"
-                }
-            },
-            "required": ["message"]
+            'type': 'application/json',
+            'properties': {
+                'message': {'type': 'string', 'description': 'OTP sent successfully'}
+            }
         },
         202: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "Password reset success message"
-                }
-            },
-            "required": ["message"]
+            'type': 'application/json',
+            'properties': {
+                'message': {'type': 'string', 'description': 'Password reset successful'}
+            }
         },
         400: {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "Validation error or incorrect credentials"
-                }
+            'type': 'application/json',
+            'properties': {
+                'error': {'type': 'object'}
+            }
+        },
+        404: {
+            'type': 'application/json',
+            'properties': {
+                'error': {'type': 'object'}
             }
         },
         500: {
-            "type": "object",
-            "properties": {
-                "errors": {
-                    "type": "string",
-                    "description": "Mailer job failure"
-                }
+            'type': 'application/json',
+            'properties': {
+                'error': {'type': 'object'}
             }
         }
     },
     examples=[
         OpenApiExample(
-            name="OTP request",
-            value={
-                "username": "ShinjoBlal"
-            },
-            request_only=True,
-            media_type="application/json"
-        ),
-        OpenApiExample(
-            name="OTP verification and password reset",
-            value={
-                "username": "ShinjoBlal",
-                "OTP": 1234,
-                "password": "newhunter2"
-            },
-            request_only=True,
-            media_type="application/json"
-        ),
-        OpenApiExample(
-            name="OTP sent",
-            value={
-                "message": "otp sent to batman@example.com for password reset for account ShinjoBlal"
-            },
+            name='OTP Sent Successfully',
+            value={"message": "otp sent successfully"},
             response_only=True,
-            status_codes=["201"]
+            status_codes=['201']
         ),
         OpenApiExample(
-            name="Successful password reset",
-            value={
-                "message": "Password change successfull for account ShinjoBlal please continue login"
-            },
+            name='Password Reset Successful',
+            value={"message": "password change successful, please continue login"},
             response_only=True,
-            status_codes=["202"]
+            status_codes=['202']
         ),
         OpenApiExample(
-            name="OTP expired or incorrect",
-            value={
-                "message": "OTP either expired or incorrect"
-            },
+            name='Missing Username',
+            value={"error": {"code": "not_null_constraint", "message": "username cannot be none"}},
             response_only=True,
-            status_codes=["400"]
+            status_codes=['400']
         ),
         OpenApiExample(
-            name="Invalid username or no OTP generated",
-            value={
-                "message": "Incorrect username entered or OTP not generated for this user"
-            },
+            name='Missing Password During Reset',
+            value={"error": {"code": "not_null_constraint", "message": "password cannot be none"}},
             response_only=True,
-            status_codes=["400"]
+            status_codes=['400']
         ),
         OpenApiExample(
-            name="Mailer failure",
-            value={
-                "errors": "Mailer job failed!"
-            },
+            name='Invalid or Expired OTP',
+            value={"error": {"code": "otp_invalid_or_expired", "message": "OTP either expired or incorrect"}},
             response_only=True,
-            status_codes=["500"]
+            status_codes=['400']
+        ),
+        OpenApiExample(
+            name='OTP Not Found',
+            value={"error": {"code": "otp_not_found", "message": "OTP not generated for this user"}},
+            response_only=True,
+            status_codes=['404']
+        ),
+        OpenApiExample(
+            name='Username Not Found',
+            value={"error": {"code": "username_not_found", "message": "requested username not found"}},
+            response_only=True,
+            status_codes=['404']
+        ),
+        OpenApiExample(
+            name='Mailer Service Failed',
+            value={"error": {"code": "mailer_api_failed", "message": "mailer service failed"}},
+            response_only=True,
+            status_codes=['500']
         )
     ]
 )

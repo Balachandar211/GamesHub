@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Email Verification</title>
+  </head>
+  <body>
+    <p>Hi <b>{{ user_name }}</b>,</p>
+
+    <p>Please click the link below to validate your email:</p>
+
+    <p><a href="{{ verification_url }}">Validate your email</a></p>
+
+    <p>If you didn’t request this, you can safely ignore this message.</p>
+
+    <p>Best regards,<br>
+    <b>Team GamesHub</b></p>
+  </body>
+</html>

@@ -1,7 +1,7 @@
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import IsAuthenticated
 from .models import OTP
-from .serializers import userSerializer
+from .serializers import userSerializer, UserDisplaySerializer
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, JSONParser
 from rest_framework import status
@@ -15,15 +15,63 @@ import requests
 import os
 from utills.models import BlacklistedAccessToken
 from django.utils import timezone
-from .documentation import signup_schema, login_schema, extend_session_schema, update_user_schema, logout_session_schema, recover_user_schema, delete_user_schema, forgot_password_schema
+from .documentation import signup_schema, login_schema, extend_session_schema, update_user_schema, logout_session_schema, recover_user_schema, delete_user_schema, forgot_password_schema, profile_schema, validate_email_schema
 from GamesHub.settings import COOKIE_LIFETIME
-from utills.email_helper import signup_email, forgot_password_email, password_change_success_email, account_recovery_success_email, recover_account_email, user_deletion_email, user_deletion_confirmation, recoverable_deletion_confirmation
+from utills.email_helper import signup_email, forgot_password_email, password_change_success_email, account_recovery_success_email, recover_account_email, user_deletion_email, user_deletion_confirmation, recoverable_deletion_confirmation, validate_email_email
 from rest_framework_simplejwt.exceptions import TokenError
 import secrets
 from utills.storage_supabase import delete_from_supabase
+from django.core import signing
+from django.core.signing import BadSignature, SignatureExpired
+from drf_spectacular.utils import extend_schema
 User = get_user_model()
 
 EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
+
+
+@profile_schema
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def profile(request):
+    user_serial = UserDisplaySerializer(request.user).data
+    return Response({"message":"user profile data", "details":user_serial}, status=status.HTTP_200_OK)
+
+@validate_email_schema
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def validate_email(request):
+    username = request.user.get_username()
+    payload = {"user_name": username}
+    token = signing.dumps(payload)
+    validate_endpoint = request.build_absolute_uri('/') + "user/validate/" + str(token)
+
+    Subject    = f'Email verification for {username}'
+    message    = validate_email_email({"user_name":username, "verification_url":validate_endpoint})
+        
+    recipients = [request.user.get_email()]
+
+    mail_result, _ = mail_service(Subject, message, recipients)
+
+    if not mail_result:
+        return Response({"error":{"code":"mailer_api_failed", "message":"mailer service failed"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({"message":"validation email sent successfully"}, status=status.HTTP_200_OK)
+
+@extend_schema(exclude=True)
+@api_view(["GET"])
+def validate_email_token(request, token):
+    try:
+        data      = signing.loads(token, max_age=86400)
+        user_name = data["user_name"]
+        user      = User.objects.get(username__iexact = user_name)
+        user.set_valid_email()
+        user.save()
+        return Response({"message":"user email validated successfully"}, status=status.HTTP_200_OK)
+
+    except SignatureExpired:
+        return Response({"error":{"code":"token_expired", "message":"signature token expired please request a new signature token"}}, status=status.HTTP_403_FORBIDDEN)
+    except BadSignature:
+        return Response({"error":{"code":"invalid_token", "message":"signature token malformed please request a new signature token or don't modify the link manually"}}, status=status.HTTP_403_FORBIDDEN)
 
 
 @signup_schema
@@ -46,7 +94,7 @@ def SignUp(request):
         return Response({"error": {"code":"forbidden_keys", "message":f"unexpected keys {unexpected}"}}, status=status.HTTP_400_BAD_REQUEST)
     
     if request.content_type == "application/json" and request.data.get("profilePicture"):
-                    return Response({"error":{"code":"incorrect_parsing_type", "message":"please use multipart parser for profilePicture file upload"}}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error":{"code":"incorrect_parsing_type", "message":"please use multipart parser for profilePicture file upload"}}, status=status.HTTP_400_BAD_REQUEST)
 
 
     # API to check if email ID provided is valid

@@ -8,6 +8,7 @@ class AppUser(AbstractUser):
     email          = models.EmailField()
     phoneNumber    = models.CharField(max_length=15, null=True, default=None, blank=True)
     is_active      = models.BooleanField(default=True)  
+    valid_email    = models.BooleanField(default=False)  
 
 
     def get_email(self):
@@ -31,6 +32,9 @@ class AppUser(AbstractUser):
 
     def set_last_login(self):
         self.last_login = timezone.now()
+
+    def set_valid_email(self):
+        self.valid_email = True
     
     def __str__(self):
         return self.username
