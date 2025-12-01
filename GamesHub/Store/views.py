@@ -2,8 +2,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Game, Cart, Wishlist
-from .serializers import CartSerializer, WishlistSerializer, gamesSerializerSimplified
+from .models import Game, Cart, Wishlist, Wallet, WalletTransaction
+from .serializers import CartSerializer, WishlistSerializer, gamesSerializerSimplified, WalletSerializer, WalletTransactionSerializer
 from django.contrib.auth import get_user_model
 from utills.microservices import search
 from .documentation import cart_delete_schema, cart_get_schema, cart_patch_schema, cart_post_schema, whishlist_delete_schema, whishlist_get_schema, whishlist_patch_schema, whishlist_post_schema
@@ -14,6 +14,9 @@ from django.db.models import Q
 import redis
 from django.core.cache import cache
 from rest_framework.exceptions import UnsupportedMediaType
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
+from decimal import Decimal
 User = get_user_model()
 
 
@@ -251,3 +254,45 @@ def library(request):
     response = Response({"message": "library contents", "library": gameInteractionsSerial.data}, status=status.HTTP_200_OK)
     cache.set("library" + request.user.get_username(), response.data, timeout=3600)
     return response
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def wallet(request):
+    if request.method == "GET":
+        wallet, _ = Wallet.objects.get_or_create(user = request.user)
+        walletSerial = WalletSerializer(wallet).data
+        return Response({"message":f"wallet for user {request.user.get_username()}", "wallet":walletSerial}, status=status.HTTP_200_OK)
+    
+    if request.method == "POST":
+        # an external payment portal needs to be added here to make api calls currently not needed as we are mocking the payment
+        amount = request.data.get("amount")
+        if amount is None:
+            return Response({"error":{"code":"not_null_constraint", "message":"amount cannot be null"}}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            amount = Decimal(str(amount))
+        except:
+            return Response({"error":{"code":"incorrect_data_type", "message":"amount should be a valid decimal"}}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if amount <= Decimal(str(0.00)):
+            return Response({"error":"invalid_amount", "message":"for wallet recharge amount should be greater than zero"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        with transaction.atomic():
+            try:
+                wallet    = Wallet.objects.select_for_update().get(user = request.user)
+            except Wallet.DoesNotExist:
+                wallet, _ = Wallet.objects.get_or_create(user = request.user)
+                wallet    = Wallet.objects.select_for_update().get(user = request.user)
+
+            try:
+                WalletTransaction(wallet= wallet, amount=amount, payment_type = 1).save()
+            except IntegrityError as e:
+                raise
+            except ValidationError as e:
+                return Response({"error":{"code":"validation_error", "message":str(e.message)}}, status=status.HTTP_400_BAD_REQUEST)
+            
+        walletSerial = WalletSerializer(wallet).data
+
+        return Response({"message":"wallet recharged successfully", "wallet":walletSerial}, status=status.HTTP_200_OK)
+

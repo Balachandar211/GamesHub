@@ -5,7 +5,7 @@ from rest_framework import status
 from Store.models import Game, GamesMedia, Cart, Wishlist
 from Store.serializers import gamesSerializerSimplified, gamesSerializer, GameMediaSerializer
 from django.urls import reverse
-from utills.microservices import transaction_id_generator, transaction_id_decrementor, mail_service
+from utills.microservices import mail_service
 from .models import GameInteraction
 from datetime import datetime
 from django.core.cache import cache
@@ -13,8 +13,7 @@ from .serializers import GameInteractionSerializerSimplified, GameInteractionSer
 from django.db.models import Q
 from utills.email_helper import game_bought_details
 from django.core.exceptions import ValidationError
-from django.db import transaction
-from django.db import IntegrityError
+from django.db import transaction, IntegrityError
 from rest_framework.exceptions import UnsupportedMediaType
 
 @api_view(["POST"])
@@ -75,13 +74,15 @@ def buy_atomic(request):
                 GameInteraction.objects.get(game = gameObj, user = request.user)
                 na_list[id]  = "Game already available in library"
             except GameInteraction.DoesNotExist:
-                transaction_id        = transaction_id_generator()
-                price                 = gameObj.get_price()
-                total                += price
-                gameBoughtObj         = GameInteraction.objects.create(user = request.user, game = gameObj, purchase_date = datetime.now(), purchase_price = price, transaction_id = transaction_id)
-                games_bought.append(gameBoughtObj)
-                transaction_ids[id]   = transaction_id
-                
+                try:
+                    price                 = gameObj.get_price()
+                    total                += price
+                    gameBoughtObj         = GameInteraction.objects.create(user = request.user, game = gameObj, purchase_date = datetime.now(), purchase_price = price)
+                    games_bought.append(gameBoughtObj)
+                    transaction_ids[id]   = gameBoughtObj.get_transaction_id()
+                except IntegrityError as e:
+                    raise
+
                 try:
                     cart         = Cart.objects.get(user = request.user)
                     cart.games.remove(gameObj)
@@ -92,11 +93,8 @@ def buy_atomic(request):
                     wishlist     = Wishlist.objects.get(user = request.user)
                     wishlist.games.remove(gameObj)
                 except Wishlist.DoesNotExist:
-                    pass #nothing needed to be done as there is no cart
+                    pass #nothing needed to be done as there is no wishlist
 
-            except IntegrityError as e:
-                transaction_id_decrementor()
-                raise
             except Exception:
                 exception_500 = True
 

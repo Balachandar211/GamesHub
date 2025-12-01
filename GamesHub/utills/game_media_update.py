@@ -97,7 +97,6 @@ def populate_gamemedia(game):
     
     for i, img_url in enumerate(screenshot_urls):
         file_content = download_image(img_url, game_name, i)
-
         safe_path  = re.sub(r'[^a-zA-Z0-9\-_/\.]', '', game_name)
         screenshot = file_content
 
@@ -113,3 +112,20 @@ def populate_gamemedia(game):
     logs["screenshots_added"] = added
 
     return logs
+
+
+def get_cover_url(game_name):
+    query = f'fields cover.url; where name = "{game_name}"; limit 1;'
+    resp = requests.post(
+        "https://api.igdb.com/v4/games",
+        headers=IGDB_HEADERS,
+        data=query
+    )
+    if resp.ok and resp.json():
+        cover = resp.json()[0].get("cover", {})
+        url = cover.get("url", "")
+        if url:
+            url = url.replace("t_thumb", "t_cover_big")
+            return download_image(url, game_name, '')
+    return None
+

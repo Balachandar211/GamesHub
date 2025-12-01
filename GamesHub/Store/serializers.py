@@ -1,9 +1,10 @@
-from .models import Game, Cart, Wishlist, GamesMedia
+from .models import Game, Cart, Wishlist, GamesMedia, Wallet, WalletTransaction
 from rest_framework.serializers import ModelSerializer
 from rest_framework import serializers
 from utills.storage_supabase import upload_file_to_supabase
 from rest_framework.exceptions import ValidationError
 from utills.storage_supabase import supabase
+from utills.game_media_update import get_cover_url
 import re
 
 class gamesSerializer(ModelSerializer):
@@ -18,18 +19,22 @@ class gamesSerializer(ModelSerializer):
     def validate_cover_picture(self, cover_picture):
         name = self.initial_data.get("name")
 
-        if not name and hasattr(self, "instance"):
-            name = getattr(self.instance, "name")
-
-        
-        safe_path = re.sub(r'[^a-zA-Z0-9\-_/\.]', '', name)
-
-        valid_mime_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
-        if cover_picture and cover_picture.content_type not in valid_mime_types:
-            raise ValidationError("Only image files (JPEG, PNG, GIF, WEBP, JPG) are allowed.")
         if cover_picture:
+            valid_mime_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+            if cover_picture.content_type not in valid_mime_types:
+                raise ValidationError("Only image files (JPEG, PNG, GIF, WEBP, JPG) are allowed.")
+        else:
+            cover_picture = get_cover_url(name)
+            
+        if cover_picture:
+            if not name and hasattr(self, "instance"):
+                name = getattr(self.instance, "name")
+
+            safe_path = re.sub(r'[^a-zA-Z0-9\-_/\.]', '', name)
+            
             public_url = upload_file_to_supabase(cover_picture, f"{safe_path}/cover_picture")
             return public_url
+
         return None
     
     def get_cover_picture_url(self, obj):
@@ -133,3 +138,15 @@ class GameMediaSerializer(ModelSerializer):
             result = supabase.storage.from_("GamesHubMedia").create_signed_url(url_path, 600)
             return result["signedURL"]
         return obj.url
+    
+class WalletSerializer(ModelSerializer):
+    
+    class Meta:
+        model  = Wallet
+        fields = "__all__"
+
+class WalletTransactionSerializer(ModelSerializer):
+    
+    class Meta:
+        model  = WalletTransaction
+        fields = "__all__"

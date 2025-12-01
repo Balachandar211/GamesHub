@@ -2,6 +2,7 @@ import boto3
 import os
 from datetime import datetime
 from supabase import create_client
+import re
 
 SUPABASE_URL = "https://ogasrlwtvqiilymwrmmk.storage.supabase.co"
 SUPABASE_KEY = os.getenv("SUPABASE_API_KEY")
@@ -22,8 +23,8 @@ s3 = boto3.client(
 )
 
 def upload_file_to_supabase(file_obj, folder):
-
-    original_name = file_obj.name
+    
+    original_name = re.sub(r'[^a-zA-Z0-9\-_/\.]', '', file_obj.name)
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     filename  = f"{timestamp}_{original_name}"
 

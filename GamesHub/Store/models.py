@@ -1,9 +1,10 @@
-from django.db import models
+from django.db import models, transaction
 from django.contrib.auth import get_user_model
 User = get_user_model()
 from django.core.validators import MinValueValidator, MaxValueValidator
 from utills.storage_supabase import supabase
-
+from decimal import Decimal
+from django.core.exceptions import ValidationError
 # Create your models here.
 
 class Game(models.Model):
@@ -64,7 +65,7 @@ class GamesMedia(models.Model):
     url            = models.URLField(null=True, default=None, blank=True)
 
     def __str__(self):
-        return f"GameMedia for {self.game.get_name()}"
+        return f"{self.get_media_type_display()} for {self.game.get_name()}"
 
 class Cart(models.Model):
     user          = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
@@ -79,3 +80,54 @@ class Wishlist(models.Model):
 
     def __str__(self):
         return "wishlist for user " + self.user.get_username()
+    
+class Wallet(models.Model):
+    user          = models.OneToOneField(User, on_delete=models.CASCADE, unique=True, null=True, blank=True)
+    balance       = models.DecimalField(default=Decimal('0.00'), decimal_places=2, max_digits=12)
+
+    def __str__(self):
+        return f"Wallet for user {self.user.get_username()}"
+
+
+class WalletTransaction(models.Model):
+    TRANSACTION_TYPE = [
+        (1, 'credit'),
+        (2, 'debit')
+        ]
+    
+    PAYMENT_TYPE = [
+        (1, "recharge"),
+        (2, "refund"),
+        (3, "payment")
+    ]
+
+    wallet           = models.ForeignKey(Wallet, on_delete=models.DO_NOTHING, db_constraint=False)
+    transaction_type = models.PositiveSmallIntegerField(choices=TRANSACTION_TYPE, editable=False)
+    amount           = models.DecimalField(default=Decimal('0.00'), decimal_places=2, max_digits=12, validators=[MinValueValidator(Decimal('0.00'))])
+    created_at       = models.DateTimeField(auto_now_add=True)
+    payment_type     = models.PositiveSmallIntegerField(choices=PAYMENT_TYPE)
+    transaction_id   = models.BigAutoField(primary_key=True)
+
+    def clean(self):
+        if self.payment_type == 3 and self.wallet.balance - self.amount < 0:
+            raise ValidationError(f"Not enough money in wallet for payment of {self.amount}. Wallet balance is {self.wallet.balance}")
+
+    def save(self, *args, **kwargs):
+        with transaction.atomic():
+            if self.payment_type in [1, 2]:
+                self.wallet.balance += self.amount
+                self.transaction_type = 1
+            else:
+                self.wallet.balance -= self.amount
+                self.transaction_type = 2
+            
+            self.wallet.save()
+
+            return super().save(*args, **kwargs)
+    
+    def __str__(self):
+        try:
+            user = self.wallet.user.get_username()
+        except Wallet.DoesNotExist:
+            user = "Deleted User"
+        return f"Wallet transaction for user {user}"

@@ -6,7 +6,6 @@ import requests
 import os
 from django.core.cache import cache
 from django.db.models import Q
-from django.db import transaction
 
 
 # Microservice for Search
@@ -82,25 +81,6 @@ def search(request, game_ids):
 
     return cache_vals
 
-# Microservice for transaction ID generator
-def transaction_id_generator():
-    with transaction.atomic():
-        constants = Constants.objects.select_for_update().get(variable="TRANSACTION_ID")
-        current_id = int(constants.get_value())
-        next_id = current_id + 1
-        constants.set_value(str(next_id))
-        constants.save()
-        return next_id
-
-# Microservice for transaction ID decrementor
-def transaction_id_decrementor():
-    with transaction.atomic():
-        constants = Constants.objects.select_for_update().get(variable="TRANSACTION_ID")
-        current_id = int(constants.get_value())
-        next_id = current_id - 1
-        constants.set_value(str(next_id))
-        constants.save()
-        return next_id
 
 FLASK_MAILER_API_KEY = os.getenv("FLASK_MAILER_API_KEY")
 

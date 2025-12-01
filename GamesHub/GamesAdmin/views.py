@@ -42,7 +42,7 @@ def games_admin(request):
                 game_id = request.data.get('id') 
                 
                 if game_id and Game.objects.filter(id = game_id).exists():
-                    return Response({"error": {"code":"pk_integrity_error", "message":f"game with pk {game_id} already exist note id is auto incremented if entered manually make sure it dosen't exist"}}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({"error": {"code":"pk_integrity_error", "message":f"game with pk {game_id} already exist note id is auto incremented"}}, status=status.HTTP_400_BAD_REQUEST)
                 
                 data = request.data
                 gameObjs    = gamesSerializer(data = data)
@@ -64,7 +64,7 @@ def games_admin(request):
 
                     game_id = data.get('id')
                     if Game.objects.filter(id = game_id).exists():
-                        error_dict[game_id] = f"game with pk {game_id} already exist note id is auto incremented if entered manually make sure it dosen't exist"
+                        error_dict[game_id] = f"game with pk {game_id} already exist note id is auto incremented"
                     else:
                         gameObjs    = gamesSerializer(data = data)
                         if gameObjs.is_valid():
@@ -325,7 +325,7 @@ def game_media_admin(request):
 
     for id in request.data.get("games"):
         try:
-            game      =  Game.objects.get(id  = id)
+            game =  Game.objects.get(id  = id)
             logs = populate_gamemedia(game)
             game_media_updated[id] = logs
         except Game.DoesNotExist:
@@ -336,4 +336,4 @@ def game_media_admin(request):
         except Exception as e:
             return Response({"error":{"code":"auto_upload_fail", "message":"errors in automatic game media population"}, "updated_games":game_media_updated}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-    return Response({"message":"game media update details", "details":game_media_updated, "updated_games":game_media_updated}, status=status.HTTP_200_OK)
+    return Response({"message":"game media update details", "details":game_media_updated}, status=status.HTTP_200_OK)

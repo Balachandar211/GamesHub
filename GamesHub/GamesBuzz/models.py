@@ -18,11 +18,14 @@ class GameInteraction(models.Model):
     rating         = models.PositiveSmallIntegerField(default= 0, choices=RATING_CHOICES, null=True, blank=True) 
     purchase_date  = models.DateTimeField(auto_now_add=True)
     purchase_price = models.FloatField(default=0)
-    transaction_id = models.IntegerField(default=0)
+    transaction_id = models.IntegerField(primary_key=True)
     in_library     = models.BooleanField(default=True)
 
     class Meta:
         unique_together = ('user', 'game') 
+
+    def get_transaction_id(self):
+        return self.transaction_id
 
     def __str__(self):
         return f"{self.user} bought {self.game}"
