@@ -1,11 +1,10 @@
 from django.db import models, transaction
-from django.contrib.auth import get_user_model
-User = get_user_model()
 from django.core.validators import MinValueValidator, MaxValueValidator
 from utills.storage_supabase import supabase
 from decimal import Decimal
 from django.core.exceptions import ValidationError
-# Create your models here.
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 class Game(models.Model):
     name          = models.CharField(max_length=256)
@@ -85,6 +84,9 @@ class Wallet(models.Model):
     user          = models.OneToOneField(User, on_delete=models.CASCADE, unique=True, null=True, blank=True)
     balance       = models.DecimalField(default=Decimal('0.00'), decimal_places=2, max_digits=12)
 
+    def get_balance(self):
+        return self.balance
+
     def __str__(self):
         return f"Wallet for user {self.user.get_username()}"
 
@@ -107,6 +109,9 @@ class WalletTransaction(models.Model):
     created_at       = models.DateTimeField(auto_now_add=True)
     payment_type     = models.PositiveSmallIntegerField(choices=PAYMENT_TYPE)
     transaction_id   = models.BigAutoField(primary_key=True)
+
+    def get_transaction_id(self):
+        return self.transaction_id
 
     def clean(self):
         if self.payment_type == 3 and self.wallet.balance - self.amount < 0:

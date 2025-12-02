@@ -49,7 +49,8 @@ INSTALLED_APPS = [
     'utills',
     'drf_spectacular',
     "drf_spectacular_sidecar",
-    "GamesAdmin"
+    "GamesAdmin",
+    "Community"
 ]
 
 

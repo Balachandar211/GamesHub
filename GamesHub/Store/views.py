@@ -5,7 +5,7 @@ from rest_framework import status
 from .models import Game, Cart, Wishlist, Wallet, WalletTransaction
 from .serializers import CartSerializer, WishlistSerializer, gamesSerializerSimplified, WalletSerializer, WalletTransactionSerializer
 from django.contrib.auth import get_user_model
-from utills.microservices import search
+from utills.microservices import search, mail_service
 from .documentation import cart_delete_schema, cart_get_schema, cart_patch_schema, cart_post_schema, whishlist_delete_schema, whishlist_get_schema, whishlist_patch_schema, whishlist_post_schema
 from GamesHub.settings import REDIS_CLIENT
 from GamesBuzz.models import GameInteraction
@@ -17,6 +17,7 @@ from rest_framework.exceptions import UnsupportedMediaType
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from decimal import Decimal
+from utills.email_helper import wallet_recharge_successful_email
 User = get_user_model()
 
 
@@ -265,6 +266,7 @@ def wallet(request):
         return Response({"message":f"wallet for user {request.user.get_username()}", "wallet":walletSerial}, status=status.HTTP_200_OK)
     
     if request.method == "POST":
+        username = request.user.get_username()
         # an external payment portal needs to be added here to make api calls currently not needed as we are mocking the payment
         amount = request.data.get("amount")
         if amount is None:
@@ -286,12 +288,23 @@ def wallet(request):
                 wallet    = Wallet.objects.select_for_update().get(user = request.user)
 
             try:
-                WalletTransaction(wallet= wallet, amount=amount, payment_type = 1).save()
+                walletTransaction = WalletTransaction.objects.create(wallet= wallet, amount=amount, payment_type = 1)
             except IntegrityError as e:
                 raise
             except ValidationError as e:
                 return Response({"error":{"code":"validation_error", "message":str(e.message)}}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+        Subject    = f'Wallet recharge confirmation for {username}'
+        message    = wallet_recharge_successful_email({"username":username, "recharge_amount":amount, "transaction_id":walletTransaction.get_transaction_id(), "wallet_balance":wallet.get_balance()})
             
+        recipients = [request.user.get_email()]
+
+        mail_result, _ = mail_service(Subject, message, recipients)
+
+        if not mail_result:
+            return Response({"error":{"code":"mailer_api_failed", "message":"mailer service failed"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         walletSerial = WalletSerializer(wallet).data
 
         return Response({"message":"wallet recharged successfully", "wallet":walletSerial}, status=status.HTTP_200_OK)

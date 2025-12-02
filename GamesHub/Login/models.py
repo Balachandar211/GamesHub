@@ -5,7 +5,7 @@ from django.utils import timezone
 
 class AppUser(AbstractUser):
     profilePicture = models.URLField(null=True, default=None, blank=True)
-    email          = models.EmailField()
+    email          = models.EmailField(null=False)
     phoneNumber    = models.CharField(max_length=15, null=True, default=None, blank=True)
     is_active      = models.BooleanField(default=True)  
     valid_email    = models.BooleanField(default=False)  

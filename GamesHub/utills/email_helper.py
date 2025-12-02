@@ -35,3 +35,6 @@ def account_deletion_confirmation_email(context):
 
 def validate_email_email(context):
     return render_to_string("validate_email.html", context=context)
+
+def wallet_recharge_successful_email(context):
+    return render_to_string("wallet_recharge_successful.html", context=context)

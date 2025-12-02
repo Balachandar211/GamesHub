@@ -78,15 +78,6 @@ def validate_email_token(request, token):
 @api_view(["POST"])
 @parser_classes([MultiPartParser, JSONParser])
 def SignUp(request):
-    if request.data.get("username") is None or request.data.get("username") == '':
-        return Response({"error": {"code":"not_null_constraint", "message":"username cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
-
-    if request.data.get("email") is None or request.data.get("email") == '':
-        return Response({"error": {"code":"not_null_constraint", "message":"email id cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
-
-    if request.data.get("password") is None or request.data.get("password") == '':
-        return Response({"error": {"code":"not_null_constraint", "message":"password cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
-
     allowed_keys = ['username', 'email', 'password', 'first_name', 'last_name', 'profilePicture', 'email', 'phoneNumber']
 
     if not set(request.data.keys()).issubset(allowed_keys):
@@ -95,7 +86,6 @@ def SignUp(request):
     
     if request.content_type == "application/json" and request.data.get("profilePicture"):
         return Response({"error":{"code":"incorrect_parsing_type", "message":"please use multipart parser for profilePicture file upload"}}, status=status.HTTP_400_BAD_REQUEST)
-
 
     # API to check if email ID provided is valid
     try:

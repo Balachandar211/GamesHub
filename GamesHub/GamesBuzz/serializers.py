@@ -10,7 +10,7 @@ class GameInteractionSerializer(ModelSerializer):
 
         def validate_rating(self, value):
             if value not in [1, 2, 3, 4, 5]:
-                return serializers.ValidationError("Rating must be between 1 and 5.")
+                raise serializers.ValidationError("Rating must be between 1 and 5.")
             return value
 
     
