@@ -24,9 +24,16 @@
     </tr>
     {% endfor %}
   </table>
-
+  <br>
+  Total: {{ total }}<br>
   <p>
-    Total: {{ total }}<br><br>
+    {% if use_wallet %}
+    Purchase is done through GamesHub wallet, remaining balance is Rs {{wallet_balance}}
+    {% else %}
+    Purchase is done through external payment gateway
+    {% endif %}
+  </p>
+  <p>
     <b>Game on,<br>— The GamesHub Team</b>
   </p>
   <footer>

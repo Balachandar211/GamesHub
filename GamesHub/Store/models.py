@@ -135,4 +135,4 @@ class WalletTransaction(models.Model):
             user = self.wallet.user.get_username()
         except Wallet.DoesNotExist:
             user = "Deleted User"
-        return f"Wallet transaction for user {user}"
+        return f"{self.get_payment_type_display()} for user {user}"

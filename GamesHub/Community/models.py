@@ -20,6 +20,8 @@ class Post(models.Model):
     created_at    = models.DateField(auto_now_add=True)
     hashtags      = models.ManyToManyField(HashTags, editable=False)
     comments      = GenericRelation("Comment", related_query_name="post")
+    upvote        = models.PositiveBigIntegerField(default=0, editable=False)
+    downvote      = models.PositiveBigIntegerField(default=0, editable=False)
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
@@ -52,6 +54,9 @@ class Comment(models.Model):
     object_id     = models.PositiveIntegerField()
     parent_object = GenericForeignKey("content_type", "object_id")
     created_at    = models.DateTimeField(auto_now_add=True)
+    upvote        = models.PositiveBigIntegerField(default=0, editable=False)
+    downvote      = models.PositiveBigIntegerField(default=0, editable=False)
+
 
     def __str__(self):
-        return f"Comment for {self.content_type.title}"
+        return f"Comment for {self.parent_object.title}"

@@ -2,19 +2,20 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
-from Store.models import Game, GamesMedia, Cart, Wishlist
+from Store.models import Game, GamesMedia, Cart, Wishlist, WalletTransaction, Wallet
 from Store.serializers import gamesSerializerSimplified, gamesSerializer, GameMediaSerializer
 from django.urls import reverse
 from utills.microservices import mail_service
 from .models import GameInteraction
 from datetime import datetime
 from django.core.cache import cache
-from .serializers import GameInteractionSerializerSimplified, GameInteractionSerializer
+from .serializers import GameInteractionSerializerSimplified
 from django.db.models import Q
 from utills.email_helper import game_bought_details
 from django.core.exceptions import ValidationError
 from django.db import transaction, IntegrityError
 from rest_framework.exceptions import UnsupportedMediaType
+from decimal import Decimal
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -60,13 +61,14 @@ def purchase(request):
 
 
 @transaction.atomic
-def buy_atomic(request):
+def buy_atomic(request, use_wallet, wallet):
     transaction_ids  = {}
     na_list          = {}
     total            = 0
     games_bought     = []
-    exception_500    = False
-
+    
+    balance    = wallet.get_balance()
+    
     for id in request.data.get("id"):
         try:
             gameObj      = Game.objects.get(id = id)
@@ -75,13 +77,20 @@ def buy_atomic(request):
                 na_list[id]  = "Game already available in library"
             except GameInteraction.DoesNotExist:
                 try:
-                    price                 = gameObj.get_price()
+                    price                 = Decimal(str(gameObj.get_price()))
                     total                += price
                     gameBoughtObj         = GameInteraction.objects.create(user = request.user, game = gameObj, purchase_date = datetime.now(), purchase_price = price)
                     games_bought.append(gameBoughtObj)
                     transaction_ids[id]   = gameBoughtObj.get_transaction_id()
+                    if use_wallet:
+                        if balance - price >= 0:
+                            balance -= price
+                            WalletTransaction.objects.create(wallet= wallet, amount=price, payment_type = 3)
+                        else:
+                            raise ValueError(f"not enough fund in wallet, need Rs {abs(balance - price)} please reacharge and continue")
+
                 except IntegrityError as e:
-                    raise
+                    raise Exception("model integrity error")
 
                 try:
                     cart         = Cart.objects.get(user = request.user)
@@ -95,27 +104,26 @@ def buy_atomic(request):
                 except Wishlist.DoesNotExist:
                     pass #nothing needed to be done as there is no wishlist
 
-            except Exception:
-                exception_500 = True
 
         except Game.DoesNotExist:
             na_list[id]  = "Game not available enter valid id"
-        except (ValueError, ValidationError):
+        except ValidationError:
             na_list[id]  = "Game not available enter valid id with correct format"
         except UnsupportedMediaType as e:
             return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
-        except Exception:
-            exception_500 = True
+        
     
     response_message = f"Games requested bought successfully!" if len(transaction_ids) > 0 else "Nothing to buy"
 
-    return transaction_ids, games_bought, total, response_message, na_list, exception_500
+    return transaction_ids, games_bought, total, response_message, na_list
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def buy(request):
-    game_ids = request.data.get("id")
+    game_ids      = request.data.get("id")
+    use_wallet    = True if request.data.get("use_wallet") in [1, '1', "true", True] else False
+    wallet        = Wallet.objects.get(user=request.user)
 
     if game_ids is None or game_ids == '':
         return Response({"error":{"code":"not_null_constraint", "message":"buying ids cannot be empty"}}, status=status.HTTP_400_BAD_REQUEST)
@@ -123,15 +131,17 @@ def buy(request):
     if not isinstance(game_ids, list):
         return Response({"error": {"code":"incorrect_datatype", "message":"games should be passed as a list"}}, status=status.HTTP_400_BAD_REQUEST)
     
-    transaction_ids, games_bought, total, response_message, na_list, exception_500 = buy_atomic(request)
-
-    if exception_500:
-        return Response({"error":{"code":"internal_buying_point_error", "message":"internal server error"}, "transaction_ids":transaction_ids, "errors":na_list}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    try:
+        transaction_ids, games_bought, total, response_message, na_list = buy_atomic(request, use_wallet, wallet)
+    except ValueError as e:
+        return Response({"error": {"code": "insufficient_funds", "message": str(e)}},status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({"error":{"code":"internal_buying_point_error", "message":"internal server error"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     if len(transaction_ids) > 0:
 
         Subject    = f'Game{'s' if len(transaction_ids) > 1 else ''} Purchase Confirmation'
-        message    = game_bought_details({"username":request.user.get_username(), "gamesInteractions":games_bought, "total":total})
+        message    = game_bought_details({"username":request.user.get_username(), "gamesInteractions":games_bought, "total":total, "use_wallet":use_wallet, "wallet_balance":wallet.get_balance()})
         
         recepients = [request.user.get_email()]
 
@@ -214,7 +224,7 @@ def comment(request, pk):
     except GameInteraction.DoesNotExist:
         return Response({"error":{"code":"do_not_exist", "message":f"game is not present in library"}}, status= status.HTTP_404_NOT_FOUND)
     try:
-        gameInterationSerial = GameInteractionSerializer(gameInteration, data = request.data, partial = True)
+        gameInterationSerial = GameInteractionSerializerSimplified(gameInteration, data = request.data, partial = True)
 
         if gameInterationSerial.is_valid():
             gameInterationSerial.save()

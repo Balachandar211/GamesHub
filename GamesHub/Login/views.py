@@ -78,6 +78,9 @@ def validate_email_token(request, token):
 @api_view(["POST"])
 @parser_classes([MultiPartParser, JSONParser])
 def SignUp(request):
+    if request.data.get("email") is None:
+        return Response({"error": {"code":"not_null_constraint", "message":"email cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+
     allowed_keys = ['username', 'email', 'password', 'first_name', 'last_name', 'profilePicture', 'email', 'phoneNumber']
 
     if not set(request.data.keys()).issubset(allowed_keys):

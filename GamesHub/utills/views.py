@@ -16,7 +16,7 @@ def health_check(request):
 @extend_schema(exclude=True)
 @api_view(["GET"])
 def api_redirect(request):
-    return Response({"message": "requested end point not found"}, status=status.HTTP_404_NOT_FOUND)
+    return Response({"error": {"code":"endpoint_not_found", "message":"requested end point not found"}}, status=status.HTTP_404_NOT_FOUND)
 
 def monitor_1(request):
     return HttpResponse("Monitor 1 good")
