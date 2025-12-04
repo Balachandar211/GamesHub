@@ -54,77 +54,48 @@ class gamesSerializerSimplified(ModelSerializer):
     def get_cover_picture_url(self, obj):
         return obj.get_cover_picture()
 
-class CartSerializer(ModelSerializer):
+class BaseStoreObjectSerializer(ModelSerializer):
     games  = serializers.PrimaryKeyRelatedField(many=True, queryset = Game.objects.all())
     user   = serializers.SerializerMethodField(read_only=True)
     action = serializers.CharField(default = None, write_only = True)
+    
+    def create(self, validated_data):
+        validated_data.pop("action", None)
+        return super().create(validated_data)
+    
+    def update(self, instance, validated_data):
+        if "action" in validated_data:
+            if "add" == validated_data["action"]:
+                instance.games.add(*validated_data["games"])
+            if "remove" == validated_data["action"]:
+                instance.games.remove(*validated_data["games"])
+            
+            validated_data.pop("games", None)
+            validated_data.pop("action", None)
+
+        return super().update(instance, validated_data)
+    
+    def get_user(self, obj):
+        return obj.user.get_username()
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        rep['games'] = gamesSerializerSimplified(instance.games.all(), many=True).data
+        return rep
+
+class CartSerializer(BaseStoreObjectSerializer):
     
     class Meta:
         model = Cart
         fields = ['user', 'games', 'action']
         read_only_fields = ["user"]
 
-    def create(self, validated_data):
-        validated_data["user"] = self.context["request"].user
-        validated_data.pop("action", None)
-        return super().create(validated_data)
-    
-    def update(self, instance, validated_data):
-        if "action" in validated_data:
-            if "add" == validated_data["action"]:
-                instance.games.add(*validated_data["games"])
-            if "remove" == validated_data["action"]:
-                instance.games.remove(*validated_data["games"])
-            
-            validated_data.pop("games", None)
-            validated_data.pop("action", None)
-
-        return super().update(instance, validated_data)
-    
-    def get_user(self, obj):
-        return obj.user.get_username()
-
-    def to_representation(self, instance):
-        rep = super().to_representation(instance)
-        rep['games'] = gamesSerializerSimplified(instance.games.all(), many=True).data
-        return rep
-    
-class WishlistSerializer(ModelSerializer):
-    games  = serializers.PrimaryKeyRelatedField(many=True, queryset = Game.objects.all())
-    user   = serializers.SerializerMethodField(read_only=True)
-    action = serializers.CharField(default = None, write_only = True)
+class WishlistSerializer(BaseStoreObjectSerializer):
     
     class Meta:
         model = Wishlist
         fields = ['user', 'games', 'action']
         read_only_fields = ["user"]
-
-    def create(self, validated_data):
-        validated_data["user"] = self.context["request"].user
-        validated_data.pop("action", None)
-        return super().create(validated_data)
-    
-    def update(self, instance, validated_data):
-        if "action" in validated_data:
-            if "add" == validated_data["action"]:
-                instance.games.add(*validated_data["games"])
-            if "remove" == validated_data["action"]:
-                instance.games.remove(*validated_data["games"])
-            
-            validated_data.pop("games", None)
-            validated_data.pop("action", None)
-
-        return super().update(instance, validated_data)
-    
-    def get_user(self, obj):
-        return obj.user.get_username()
-
-    def to_representation(self, instance):
-        rep = super().to_representation(instance)
-        rep['games'] = gamesSerializerSimplified(instance.games.all(), many=True).data
-        return rep
-
-
 
 class GameMediaSerializer(ModelSerializer):
     signed_url = serializers.SerializerMethodField()
