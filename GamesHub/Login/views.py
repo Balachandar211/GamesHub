@@ -24,6 +24,7 @@ from utills.storage_supabase import delete_from_supabase
 from django.core import signing
 from django.core.signing import BadSignature, SignatureExpired
 from drf_spectacular.utils import extend_schema
+from django.core.cache import cache
 User = get_user_model()
 
 EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
@@ -33,8 +34,16 @@ EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def profile(request):
+    cache_key = "user" + request.user.get_username()
+    cache_val = cache.get(cache_key)
+
+    if cache_val:
+        return Response(cache_val, status=status.HTTP_200_OK)
+
     user_serial = UserDisplaySerializer(request.user).data
-    return Response({"message":"user profile data", "details":user_serial}, status=status.HTTP_200_OK)
+    cache_val   = {"message":"user profile data", "details":user_serial}
+    cache.set(cache_key, cache_val, timeout=2592000)
+    return Response(cache_val, status=status.HTTP_200_OK)
 
 @validate_email_schema
 @api_view(["GET"])

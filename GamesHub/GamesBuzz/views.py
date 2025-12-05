@@ -5,7 +5,7 @@ from rest_framework import status
 from Store.models import Game, GamesMedia, Cart, Wishlist, WalletTransaction, Wallet
 from Store.serializers import gamesSerializerSimplified, gamesSerializer, GameMediaSerializer
 from django.urls import reverse
-from utills.microservices import mail_service
+from utills.microservices import mail_service, delete_cache_key
 from .models import GameInteraction
 from datetime import datetime
 from django.core.cache import cache
@@ -139,13 +139,14 @@ def buy(request):
         return Response({"error":{"code":"internal_buying_point_error", "message":"internal server error"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     if len(transaction_ids) > 0:
-
+        username   = request.user.get_username()
         Subject    = f'Game{'s' if len(transaction_ids) > 1 else ''} Purchase Confirmation'
-        message    = game_bought_details({"username":request.user.get_username(), "gamesInteractions":games_bought, "total":total, "use_wallet":use_wallet, "wallet_balance":wallet.get_balance()})
+        message    = game_bought_details({"username":username, "gamesInteractions":games_bought, "total":total, "use_wallet":use_wallet, "wallet_balance":wallet.get_balance()})
         
         recepients = [request.user.get_email()]
 
         mail_result, _ = mail_service(Subject, message, recepients)
+        delete_cache_key("transaction" + username)
         
         if not mail_result:
             return Response({"error":{"code":"mailer_api_failed", "message":"mailer service failed but games bought added successfully"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -157,13 +158,13 @@ def buy(request):
 @api_view(["GET"])
 def games_detail(request, pk):
     if request.user.is_authenticated:
-        key = request.user.get_username() + str(pk)
+        key = "game" + request.user.get_username() + str(pk)
     else:
-        key = "anonymous_user" + str(pk)
+        key = "game" + "anonymous_user" + str(pk)
 
     cached_game = cache.get(key)
     if cached_game:
-        return cached_game
+        return Response(cached_game, status=status.HTTP_200_OK)
             
     try:
         game  = Game.objects.get(pk = pk) 
@@ -181,7 +182,7 @@ def games_detail(request, pk):
             gameInteractionSerial         = GameInteractionSerializerSimplified(gameInteraction, many = True)
             gameInteractionSerialData     = gameInteractionSerial.data
 
-            key = request.user.get_username() + str(pk)
+            key = "game" + request.user.get_username() + str(pk)
         else:
             gameInteractionSerialDataUser = {}
             library_flag                  = False
@@ -190,7 +191,7 @@ def games_detail(request, pk):
             gameInteractionSerial         = GameInteractionSerializerSimplified(gameInteraction, many = True)
             gameInteractionSerialData     = gameInteractionSerial.data
 
-            key = "anonymous_user" + str(pk)
+            key = "game" + "anonymous_user" + str(pk)
 
         gameSerialData = gamesSerializer(game)
         gameData       = gameSerialData.data
@@ -205,7 +206,7 @@ def games_detail(request, pk):
 
     response = Response({"message": f"game detail for pk {pk}", "in_library":library_flag, "game":gameData, "game_media":gameMediaSerial.data, "user_comment": gameInteractionSerialDataUser, "comments":gameInteractionSerialData }, status=status.HTTP_200_OK)
     
-    cache.set(key, response, timeout=3600)
+    cache.set(key, response.data, timeout=3600)
 
     return Response({"message": f"game detail for pk {pk}", "in_library":library_flag, "game":gameData, "game_media":gameMediaSerial.data, "user_comment": gameInteractionSerialDataUser, "comments":gameInteractionSerialData }, status=status.HTTP_200_OK)
     

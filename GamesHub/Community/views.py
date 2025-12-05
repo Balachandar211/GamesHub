@@ -9,6 +9,7 @@ from rest_framework import status
 from django.core.cache import cache
 from rest_framework.exceptions import NotFound
 from django.contrib.contenttypes.models import ContentType
+from utills.microservices import delete_cache_key
 
 POST_CONTENT_TYPE = ContentType.objects.get_for_model(Post)
 
@@ -69,17 +70,15 @@ class BaseListCreateView(ListCreateAPIView):
         return super().paginate_queryset(queryset)
 
     def create(self, request, *args, **kwargs):
+        base_key = self.model.__name__.lower()
         serializer = self.serializer_class(data=request.data)
-
+        
         if not serializer.is_valid():
-            return Response(
-                {"error": {"code": "validation_errors", "details": serializer.errors}},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": {"code": "validation_errors", "details": serializer.errors}},status=status.HTTP_400_BAD_REQUEST)
         
         extra_kwargs = self.get_extra_save_kwargs(request, *args, **kwargs)
         serializer.save(user=request.user, **extra_kwargs)
-        
+        delete_cache_key(base_key)
         return Response({"message": f"{self.model.__name__} has been saved successfully", self.model.__name__: serializer.data}, status=status.HTTP_200_OK)
     
 
@@ -123,7 +122,7 @@ class BaseRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
         cached_page = cache.get(cache_key)
 
         if cached_page is not None:
-            return Response(cached_page)
+            return Response(cached_page, status=status.HTTP_200_OK)
         
         instance = self.get_object()
         serializer = self.get_serializer(instance)
@@ -132,32 +131,30 @@ class BaseRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
 
         cache.set(cache_key, data, timeout=self.cache_timeout)
 
-        return Response(data)
+        return Response(data, status=status.HTTP_200_OK)
 
     def update(self, request, *args, **kwargs):
+        base_key = self.model.__name__.lower()
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         
         self.perform_update(serializer)
-        
+        delete_cache_key(base_key)
         return Response({"message": f"{self.model.__name__} updated successfully","data": serializer.data}, status=status.HTTP_200_OK)
 
     def destroy(self, request, *args, **kwargs):
+        base_key = self.model.__name__.lower()
         instance = self.get_object()
         self.perform_destroy(instance)
+        delete_cache_key(base_key)
         return Response({"message": f"{self.model.__name__} deleted successfully"},status=status.HTTP_204_NO_CONTENT)
     
     def handle_exception(self, exc):
         response = super().handle_exception(exc)
         if isinstance(exc, NotFound) and response is not None:
-            response.data = {
-                "error": {
-                    "code": "not_found",
-                    "detail": str(exc.detail)
-                }
-            }
+            response.data = {"error": {"code": "not_found","detail": str(exc.detail)}}
         return response
 
     def get_queryset(self):

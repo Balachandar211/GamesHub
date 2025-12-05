@@ -60,3 +60,15 @@ class Comment(models.Model):
 
     def __str__(self):
         return f"Comment for {self.parent_object.title}"
+
+class PostMedia(models.Model):
+    MEDIA_CHOICES = [
+        (1, 'Screen_Shot'),
+        (2, 'Gameplay')
+        ]
+    post           = models.ForeignKey(Post, on_delete=models.CASCADE)
+    media_type     = models.PositiveSmallIntegerField(default= 0, choices=MEDIA_CHOICES, null=True, blank=True) 
+    url            = models.URLField(null=True, default=None, blank=True)
+
+    def __str__(self):
+        return f"{self.get_media_type_display()} for {self.game}"

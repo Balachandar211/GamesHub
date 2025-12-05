@@ -1,11 +1,18 @@
 from rest_framework.pagination import LimitOffsetPagination
 from Store.models import Game
 from Store.serializers import gamesSerializer
-from .models import Constants
 import requests
 import os
 from django.core.cache import cache
 from django.db.models import Q
+
+redis_client = cache.client.get_client()
+
+def delete_cache_key(base_key):
+    keys = list(redis_client.scan_iter(f":1:{base_key}*"))
+
+    if keys:
+        redis_client.delete(*keys)
 
 
 # Microservice for Search
@@ -14,7 +21,7 @@ def search(request, game_ids):
 
     paginator = LimitOffsetPagination()
     
-    cached_vals = cache.get(path_key + "CACHED_GAMES")
+    cached_vals = cache.get("game" + path_key + "CACHED_GAMES")
 
     if not request.GET and cached_vals and not game_ids:
         cache_vals = cached_vals
@@ -28,11 +35,11 @@ def search(request, game_ids):
         gamesSerial = gamesSerial.data
         cache_vals  = gamesSerial, paginator.get_next_link(), paginator.get_previous_link(), paginator.count
         if not game_ids:
-            cache.set(path_key + "CACHED_GAMES", cache_vals, timeout=3600)
+            cache.set("game" + path_key + "CACHED_GAMES", cache_vals, timeout=2592000)
     else:
         query_params = request.GET.dict()
         sorted_pairs = str(sorted(tuple(query_params.items()), key=lambda x: x[1].lower()))
-        cached_vals = cache.get(path_key + sorted_pairs)
+        cached_vals = cache.get("game" + path_key + sorted_pairs)
 
         if cached_vals:
             cache_vals = cached_vals
@@ -77,7 +84,7 @@ def search(request, game_ids):
             sorted_pairs = str(sorted(tuple(query_params.items()), key=lambda x: x[1].lower()))
             cache_vals  = gamesSerial, paginator.get_next_link(), paginator.get_previous_link(), paginator.count
             if not game_ids:
-                cache.set(path_key + sorted_pairs, cache_vals, timeout=3600)
+                cache.set("game" + path_key + sorted_pairs, cache_vals, timeout=2592000)
 
     return cache_vals
 

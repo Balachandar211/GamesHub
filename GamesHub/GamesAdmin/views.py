@@ -115,6 +115,12 @@ def games_admin(request):
                         error_dict[data.get('name')] =  "user multipart parser for cover picture update"
                         continue
 
+                    try:
+                        int(data.get('id'))
+                    except:
+                        error_dict[idx] = f"Entry with incorrect id data type field exist at position {idx}"
+                        continue
+
                     if not data.get('id'):
                         error_dict[idx] = f"Entry without id field exist at position {idx}"
                     elif Game.objects.filter(id = data.get('id')).exists():

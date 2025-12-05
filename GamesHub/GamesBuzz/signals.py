@@ -2,7 +2,8 @@ from django.db.models.signals import post_save, pre_save, post_delete
 from django.dispatch import receiver
 from .models import GameInteraction
 from Store.models import Game
-from django.core.cache import cache
+from Store.models import GamesMedia
+from utills.microservices import delete_cache_key
 
 @receiver(pre_save, sender=GameInteraction)
 def update_rating_change(sender, instance, **kwargs):
@@ -32,16 +33,18 @@ def update_game_rating(sender, instance, **kwargs):
         new_rating     = round((current_rating + instance.rating)/no_of_rating, 2)
         gameObj.set_rating_detail(new_rating, no_of_rating)
         gameObj.save()
-        cache.clear()
+        delete_cache_key("game")
+    delete_cache_key("library")
 
+
+@receiver(post_save, sender=GamesMedia)
+@receiver(post_delete, sender=GamesMedia)
 @receiver(post_save, sender=Game)
-def update_cache_after_save(sender, instance, **kwargs):
-    cache.clear()
-
 @receiver(post_delete, sender=Game)
-def update_cache_after_delete(sender, instance, **kwargs):
-    cache.clear()
-
-@receiver(post_save, sender=GameInteraction)
 def update_cache(sender, instance, **kwargs):
-    cache.clear()
+    delete_cache_key("game")
+
+
+@receiver(post_delete, sender=GameInteraction)
+def update_cache(sender, instance, **kwargs):
+    delete_cache_key("library")

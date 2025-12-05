@@ -1,12 +1,13 @@
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from utills.permissions import IsAdminOrReadOnly
 from rest_framework import status
-from .models import Game, Cart, Wishlist, Wallet, WalletTransaction
-from .serializers import CartSerializer, WishlistSerializer, gamesSerializerSimplified, WalletSerializer, WalletTransactionSerializer
+from .models import Game, Cart, Wishlist, Wallet, WalletTransaction, Sale
+from .serializers import CartSerializer, WishlistSerializer, gamesSerializerSimplified, WalletSerializer, WalletTransactionSerializer, SaleSerializer, SaleSerializerDetail
 from django.contrib.auth import get_user_model
-from utills.microservices import search, mail_service
+from utills.microservices import search, mail_service, delete_cache_key
 from .documentation import cart_delete_schema, cart_get_schema, cart_patch_schema, cart_post_schema, whishlist_delete_schema, whishlist_get_schema, whishlist_patch_schema, whishlist_post_schema
 from GamesHub.settings import REDIS_CLIENT
 from GamesBuzz.models import GameInteraction
@@ -19,8 +20,26 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from decimal import Decimal
 from utills.email_helper import wallet_recharge_successful_email
+from rest_framework.exceptions import UnsupportedMediaType
+from rest_framework.views import exception_handler
+from rest_framework.pagination import LimitOffsetPagination
+from rest_framework.parsers import MultiPartParser
+import copy
 User = get_user_model()
 
+
+def get_cache_key(request):
+    query_params = request.GET.dict()
+    sorted_pairs = str(sorted(tuple(query_params.items()), key=lambda x: x[1].lower()))
+    username   = request.user.get_username()
+
+    return  username + sorted_pairs
+
+def get_paginated(request, objects, serializer):
+    paginator              = LimitOffsetPagination()
+    paginated_transactions = paginator.paginate_queryset(objects, request)
+    objectSerial           = serializer(paginated_transactions, many=True).data
+    return objectSerial, paginator.get_next_link(), paginator.get_previous_link(), paginator.count
 
 @api_view(["GET"])
 def Home(request):
@@ -35,35 +54,62 @@ class BaseStoreObjectsView(APIView):
 
     permission_classes = [IsAuthenticated]
     http_method_names  = ['get', 'post', 'patch', 'delete']
+    
+    def handle_exception(self, exc):
+        model_name = self.model.__name__.lower()
 
+        if isinstance(exc, self.model.DoesNotExist):
+            return Response({"error": {"code": "do_not_exist","message": f"{model_name} for user not created yet use POST to create it"},model_name: []}, status=status.HTTP_404_NOT_FOUND)
+
+        if isinstance(exc, UnsupportedMediaType):
+            return Response({"error": {"code": "unsupported_media_type", "message": str(exc)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+
+        response = exception_handler(exc, {"view": self, "request": self.request})
+        if response is not None:
+            return response
+
+        method = self.request.method.lower()
+        return Response({"error": {"code": f"{model_name}_{method}_error","message": "internal server error"},model_name: []}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
     def check_games(self, request, model_name):
-        game_ids = request.data.get("games")
+        game_ids  = request.data.get("games")
+        valid_ids = copy.deepcopy(game_ids)
         if game_ids is None or game_ids == '':
             return Response({"error":{"code":"not_null_constraint", "message":f"{model_name} cannot be empty"}}, status=status.HTTP_400_BAD_REQUEST)
 
         if not isinstance(game_ids, list):
             return Response({"error": {"code":"incorrect_datatype", "message":"games should be passed as a list"}}, status=status.HTTP_400_BAD_REQUEST)
-        
+
+        for ids in valid_ids:
+            try:
+                int(ids)
+            except:
+                request.data.get("games").remove(ids)
+                continue 
+
+            if GameInteraction.objects.filter(game__id = ids).exists():
+                request.data.get("games").remove(ids)
+            
+
+    def get_object(self, request):
+        return self.model.objects.get(user = request.user)
 
     def get(self, request):
         model_name  = self.model.__name__.lower()
-        cache_val   = cache.get(model_name + request.user.get_username())
+        cache_key   = model_name + get_cache_key(request)
+        model_name  = self.model.__name__.lower()
+        cache_val   = cache.get(cache_key)
 
         if cache_val:
             return Response(cache_val)
         
-        try:
-            modelObj     = self.model.objects.get(user = request.user)
-            modelObjData = self.serializer_class(modelObj).data
-            response = Response({"message":f"{model_name} for user", model_name:modelObjData}, status=status.HTTP_200_OK)
-            cache.set(model_name + request.user.get_username(), response.data, timeout=3600)
-            return response
+        modelObj     = self.get_object(request)
+        gameObjs     = modelObj.games.all()
+        cache_vals   = get_paginated(request, gameObjs, self.paginate_serializer)
+        response = Response({"message":f"{model_name} for user", "next":cache_vals[1], "previous":cache_vals[2], "count":cache_vals[3], model_name:cache_vals[0]}, status=status.HTTP_200_OK)
+        cache.set(cache_key, response.data, timeout=3600)
+        return response
         
-        except self.model.DoesNotExist:
-            return Response({"message":f"{model_name} for user does not exist", model_name:[]}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"error":{"code":f"{model_name}_get_error", "message":"internal server error"}, model_name:[]}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
     def post(self, request):
         model_name  = self.model.__name__.lower()
         if self.model.objects.filter(user = request.user).exists():
@@ -73,68 +119,45 @@ class BaseStoreObjectsView(APIView):
         if check_response is not None:
             return check_response  
 
-        try:
-            modelSerialData = self.serializer_class(data = request.data)
-            if modelSerialData.is_valid():
-                modelSerialData.save(user = request.user)
-                cache.delete(model_name + request.user.get_username())
-                return Response({"message":f"{model_name} saved successfully", model_name:modelSerialData.data}, status=status.HTTP_200_OK)
-            else:
-                return Response({"error":{"code":f"new_{model_name}_error", "details":modelSerialData.errors}}, status=status.HTTP_400_BAD_REQUEST)
-        except UnsupportedMediaType as e:
-            return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
-        
-        except Exception as e:
-            return Response({"error":{"code":f"{model_name}_post_error", "message":"internal server error"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-         
+        modelSerialData = self.serializer_class(data = request.data)
+        if modelSerialData.is_valid():
+            modelSerialData.save(user = request.user)
+            return Response({"message":f"{model_name} saved successfully"}, status=status.HTTP_201_CREATED)
+        else:
+            return Response({"error":{"code":f"new_{model_name}_error", "details":modelSerialData.errors}}, status=status.HTTP_400_BAD_REQUEST)
+    
     def patch(self, request):
         model_name  = self.model.__name__.lower()
 
         check_response = self.check_games(request, model_name)
         if check_response is not None:
             return check_response  
-        try:
-            modelObj = self.model.objects.get(user = request.user)
-                
-            modelSerialData = self.serializer_class(modelObj, data = request.data, partial = True)
-            if modelSerialData.is_valid():
-                modelSerialData.save()
-                cache.delete(model_name + request.user.get_username())
-                return Response({"message": f"{model_name} updated successfully", model_name:modelSerialData.data}, status= status.HTTP_202_ACCEPTED)
-            else:
-                return Response({"error":{"code":f"update_{model_name}_error", "details":modelSerialData.errors}}, status=status.HTTP_400_BAD_REQUEST)
-        except self.model.DoesNotExist:
-            return Response({"error": {"code":"do_not_exist", "message":f"{model_name} for user not created yet"}}, status=status.HTTP_404_NOT_FOUND)
-        except UnsupportedMediaType as e:
-            return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         
-        except Exception as e:
-            return Response({"error":{"code":f"{model_name}_patch_error", "message":"internal server error"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        modelObj = self.get_object(request)
+            
+        modelSerialData = self.serializer_class(modelObj, data = request.data, partial = True)
+        if modelSerialData.is_valid():
+            modelSerialData.save()
+            return Response({"message": f"{model_name} updated successfully"}, status= status.HTTP_202_ACCEPTED)
+        else:
+            return Response({"error":{"code":f"update_{model_name}_error", "details":modelSerialData.errors}}, status=status.HTTP_400_BAD_REQUEST)
     
     def delete(self, request):
         model_name  = self.model.__name__.lower()
-
-        try:
-            modelObj = self.model.objects.get(user = request.user)
-            modelObj.delete()
-            cache.delete(model_name + request.user.get_username())
-            return Response({"message":f"{model_name} for user deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
-        except self.model.DoesNotExist:
-            return Response({"error": {"code":"do_not_exist", "message":f"{model_name} for user does not exist"}}, status=status.HTTP_404_NOT_FOUND)
-        except UnsupportedMediaType as e:
-            return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
-        
-        except Exception:
-            return Response({"error":{model_name:f"{model_name}_delete_error", "message":"internal server error"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-       
+        modelObj = self.get_object(request)
+        modelObj.delete()
+        return Response({"message":f"{model_name} for user deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+    
 
 class UserCart(BaseStoreObjectsView):
-    model            = Cart
-    serializer_class = CartSerializer
+    model               = Cart
+    serializer_class    = CartSerializer
+    paginate_serializer = gamesSerializerSimplified
 
 class UserWishlist(BaseStoreObjectsView):
-    model            = Wishlist
-    serializer_class = WishlistSerializer
+    model               = Wishlist
+    serializer_class    = WishlistSerializer
+    paginate_serializer = gamesSerializerSimplified
 
 
 #Possible bug have to clear out later
@@ -166,13 +189,14 @@ def featuredPage(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def library(request):
-    cache_vals             = cache.get("library" + request.user.get_username())
+    cache_key              = get_cache_key(request)
+    cache_vals             = cache.get("library" + cache_key)
     if cache_vals:
-        return Response(cache_vals)
+        return Response(cache_vals, status=status.HTTP_200_OK)
     gameInteractions       = GameInteraction.objects.filter(Q(user = request.user) & Q(in_library = True)).select_related('game').order_by('-purchase_date')
-    gameInteractionsSerial = GameInteractionSerializerSimplified(gameInteractions, many = True)
-    response = Response({"message": "library contents", "library": gameInteractionsSerial.data}, status=status.HTTP_200_OK)
-    cache.set("library" + request.user.get_username(), response.data, timeout=3600)
+    cache_vals             = get_paginated(request, gameInteractions, GameInteractionSerializerSimplified)
+    response = Response({"message": "library contents", "next":cache_vals[1], "previous":cache_vals[2], "count":cache_vals[3], "library":cache_vals[0]}, status=status.HTTP_200_OK)
+    cache.set("library" + cache_key, response.data, timeout=2592000)
     return response
 
 
@@ -213,7 +237,7 @@ def wallet(request):
             except ValidationError as e:
                 return Response({"error":{"code":"validation_error", "message":str(e.message)}}, status=status.HTTP_400_BAD_REQUEST)
         
-
+        delete_cache_key("transaction" + username)
         Subject    = f'Wallet recharge confirmation for {username}'
         message    = wallet_recharge_successful_email({"username":username, "recharge_amount":amount, "transaction_id":walletTransaction.get_transaction_id(), "wallet_balance":wallet.get_balance()})
             
@@ -228,3 +252,82 @@ def wallet(request):
 
         return Response({"message":"wallet recharged successfully", "wallet":walletSerial}, status=status.HTTP_200_OK)
 
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def wallet_transaction(request):
+    cache_key  = get_cache_key(request)
+    cache_vals = cache.get("transaction" + cache_key)
+    if cache_vals:
+        return Response({"message":"wallet transaction details for user", "next":cache_vals[1], "previous":cache_vals[2], "count":cache_vals[3], "transactions":cache_vals[0]}, status=status.HTTP_200_OK)
+    
+    wallet, _              = Wallet.objects.get_or_create(user = request.user)
+    wallet_transactions    = WalletTransaction.objects.filter(wallet= wallet).order_by('-created_at')
+    cache_vals             = get_paginated(request, wallet_transactions, WalletTransactionSerializer)
+    cache.set("transaction" + cache_key, cache_vals, timeout=3600)
+    return Response({"message":"wallet transaction details for user", "next":cache_vals[1], "previous":cache_vals[2], "count":cache_vals[3], "transactions":cache_vals[0]}, status=status.HTTP_200_OK)
+    
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAdminOrReadOnly])
+@parser_classes([MultiPartParser])
+def sale_view(request):
+    if request.method == "GET":
+        sales        = Sale.objects.all()
+        sales_serial = SaleSerializer(sales, many=True)
+        return Response({"message":"GamesHub sales details", "sales":sales_serial.data}, status=status.HTTP_200_OK)
+
+    if request.method == "POST":
+        try:
+            serial_data  = SaleSerializer(data=request.data)
+            if serial_data.is_valid():
+                serial_data.save()
+                return Response({"message":"sale data saved successfully", "sale":serial_data.data}, status=status.HTTP_201_CREATED)
+            return Response({"error":{"code":"validation_error", "details":serial_data.errors}}, status=status.HTTP_400_BAD_REQUEST)
+        except UnsupportedMediaType as e:
+            return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+        except Exception as e:
+            print(e)
+            return Response({"error":{"code": f"sale_endpoint_error","message": "internal server error"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAdminOrReadOnly])
+@parser_classes([MultiPartParser])
+def sale_detail_view(request, pk):
+    if request.method == "GET":
+        try:
+            sale        = Sale.objects.get(pk = pk)
+            sale_serial = SaleSerializerDetail(sale)
+            return Response({"message":"sale detail", "sale":sale_serial.data}, status=status.HTTP_200_OK)
+        except Sale.DoesNotExist:
+            return Response({"error": {"code": "do_not_exist","message": f"sale object do not exist"}}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": {"code":"manage_sale_failed", "message":"errors in sale manage get endpoint"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+    if request.method == "PATCH":
+        try:
+            sale        = Sale.objects.get(pk = pk)
+            sale_serial = SaleSerializerDetail(sale, data = request.data, partial=True)
+            if sale_serial.is_valid():
+                sale_serial.save()
+                return Response({"message":"sale data saved successfully", "sale":sale_serial.data}, status=status.HTTP_201_CREATED)
+            return Response({"error":{"code":"validation_error", "details":sale_serial.errors}}, status=status.HTTP_400_BAD_REQUEST)
+        except UnsupportedMediaType as e:
+            return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+        
+        except Sale.DoesNotExist:
+            return Response({"error": {"code": "do_not_exist","message": f"sale object do not exist"}}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": {"code":"manage_sale_failed", "message":"errors in sale manage patch endpoint"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    if request.method == "DELETE":
+        try:
+            Sale.objects.get(pk = pk).delete()
+            return Response({"message":"sale object deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+        except Sale.DoesNotExist:
+            return Response({"error": {"code": "do_not_exist","message": f"sale object do not exist"}}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": {"code":"manage_sale_failed", "message":"errors in sale manage delete endpoint"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
