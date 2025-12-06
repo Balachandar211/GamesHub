@@ -6,16 +6,21 @@ from Store.models import Game, GamesMedia, Cart, Wishlist, WalletTransaction, Wa
 from Store.serializers import gamesSerializerSimplified, gamesSerializer, GameMediaSerializer
 from django.urls import reverse
 from utills.microservices import mail_service, delete_cache_key
-from .models import GameInteraction
+from .models import GameInteraction, Review
 from datetime import datetime
 from django.core.cache import cache
-from .serializers import GameInteractionSerializerSimplified
+from .serializers import ReviewSerializer
 from django.db.models import Q
 from utills.email_helper import game_bought_details
 from django.core.exceptions import ValidationError
 from django.db import transaction, IntegrityError
 from rest_framework.exceptions import UnsupportedMediaType
 from decimal import Decimal
+from utills.baseviews import BaseRetrieveUpdateDestroyView, BaseListCreateView
+from django.contrib.contenttypes.models import ContentType
+from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import ValidationError as RestValidationError
+REVIEW_CONTENT_TYPE = ContentType.objects.get_for_model(GameInteraction)
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -133,6 +138,10 @@ def buy(request):
     
     try:
         transaction_ids, games_bought, total, response_message, na_list = buy_atomic(request, use_wallet, wallet)
+        username = request.user.get_username()
+        delete_cache_key("library" + username)
+        if use_wallet:
+            delete_cache_key("transaction" + username)
     except ValueError as e:
         return Response({"error": {"code": "insufficient_funds", "message": str(e)}},status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
@@ -174,22 +183,11 @@ def games_detail(request, pk):
 
         if request.user.is_authenticated:
             gameInteractionUser           = GameInteraction.objects.filter(Q(game = game) & Q(user = request.user))
-            gameInteractionSerialUser     = GameInteractionSerializerSimplified(gameInteractionUser, many = True)
-            gameInteractionSerialDataUser = gameInteractionSerialUser.data
             library_flag                  = gameInteractionUser.exists()
-
-            gameInteraction               = GameInteraction.objects.filter(Q(game = game) & ~Q(user = request.user))
-            gameInteractionSerial         = GameInteractionSerializerSimplified(gameInteraction, many = True)
-            gameInteractionSerialData     = gameInteractionSerial.data
 
             key = "game" + request.user.get_username() + str(pk)
         else:
-            gameInteractionSerialDataUser = {}
             library_flag                  = False
-
-            gameInteraction               = GameInteraction.objects.filter(Q(game = game))
-            gameInteractionSerial         = GameInteractionSerializerSimplified(gameInteraction, many = True)
-            gameInteractionSerialData     = gameInteractionSerial.data
 
             key = "game" + "anonymous_user" + str(pk)
 
@@ -204,36 +202,54 @@ def games_detail(request, pk):
         return Response({"error":{"code":"game_detail_failed", "message":"please try back later"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-    response = Response({"message": f"game detail for pk {pk}", "in_library":library_flag, "game":gameData, "game_media":gameMediaSerial.data, "user_comment": gameInteractionSerialDataUser, "comments":gameInteractionSerialData }, status=status.HTTP_200_OK)
+    response = Response({"message": f"game detail for pk {pk}", "in_library":library_flag, "game":gameData, "game_media":gameMediaSerial.data}, status=status.HTTP_200_OK)
     
     cache.set(key, response.data, timeout=3600)
 
-    return Response({"message": f"game detail for pk {pk}", "in_library":library_flag, "game":gameData, "game_media":gameMediaSerial.data, "user_comment": gameInteractionSerialDataUser, "comments":gameInteractionSerialData }, status=status.HTTP_200_OK)
-    
+    return Response({"message": f"game detail for pk {pk}", "in_library":library_flag, "game":gameData, "game_media":gameMediaSerial.data}, status=status.HTTP_200_OK)
 
-
-@api_view(["PATCH"])
-@permission_classes([IsAuthenticated])
-def comment(request, pk):
-    try:
-        gameObj        = Game.objects.get(id = pk)
-    except Game.DoesNotExist:
-        return Response({"error":{"code":"do_not_exist", "message":f"no game with id {pk} exist"}}, status= status.HTTP_404_NOT_FOUND)
-    
-    try:
-        gameInteration = GameInteraction.objects.get(game = gameObj, user = request.user)
-    except GameInteraction.DoesNotExist:
-        return Response({"error":{"code":"do_not_exist", "message":f"game is not present in library"}}, status= status.HTTP_404_NOT_FOUND)
-    try:
-        gameInterationSerial = GameInteractionSerializerSimplified(gameInteration, data = request.data, partial = True)
-
-        if gameInterationSerial.is_valid():
-            gameInterationSerial.save()
-            return Response({"message":"Comment saved successfully!"}, status=status.HTTP_202_ACCEPTED)
-        return Response({"errors":{"code":"validation_error", "details":gameInterationSerial.errors}}, status=status.HTTP_400_BAD_REQUEST)
-    except UnsupportedMediaType as e:
-        return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+class ReviewListCreateView(BaseListCreateView):
+    model            = Review
+    serializer_class = ReviewSerializer
         
-    except Exception:
-        return Response({"error":{"code":"comment_section_fail", "message":"errors in comment section"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-       
+    def get_queryset(self):
+        try:
+            gameobj         = Game.objects.get(pk = self.kwargs.get("pk"))
+        except Game.DoesNotExist:
+            raise NotFound(f"requested game with pk {self.kwargs.get("pk")} not found")
+        
+        return Review.objects.filter(game = gameobj).order_by("-created_at")
+
+    def get_extra_save_kwargs(self, request, *args, **kwargs):
+        try:
+            gameobj = Game.objects.get(pk = self.kwargs.get("pk"))
+        except Game.DoesNotExist:
+            raise NotFound(f"requested game with pk {self.kwargs.get("pk")} not found")
+
+        if request.method == "POST":
+            if not GameInteraction.objects.filter(user=request.user, game=gameobj).exists():
+                raise NotFound("user don't have game in his library so can't provide a review")
+            
+            if Review.objects.filter(user=request.user, game=gameobj).exists():
+                raise RestValidationError("user already provided review for this game use patch to update")
+            
+        return {"game": gameobj}
+    
+
+class ReviewRetrieveUpdateDestroyView(BaseRetrieveUpdateDestroyView):
+    model            = Review
+    serializer_class = ReviewSerializer
+
+    def get_object(self):
+        object_id = self.kwargs.get("object_id")
+        pk        = self.kwargs.get("pk")
+        try:
+            gameObj = Game.objects.get(id=object_id) 
+            obj     = Review.objects.get(pk=pk, game=gameObj)
+        except Game.DoesNotExist:
+            raise NotFound(f"requested game with pk {pk} not found")
+        except Review.DoesNotExist:
+            raise NotFound(f"requested review with pk {pk} not linked to Post {object_id}")
+        self.check_object_permissions(self.request, obj)
+        return obj
+

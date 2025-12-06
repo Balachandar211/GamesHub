@@ -49,7 +49,7 @@ class Post(models.Model):
 
 class Comment(models.Model):
     user          = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_constraint=False)
-    body          = models.TextField(null=False)
+    body          = models.TextField(null=False, max_length=4096)
     content_type  = models.ForeignKey(ContentType,on_delete=models.CASCADE)
     object_id     = models.PositiveIntegerField()
     parent_object = GenericForeignKey("content_type", "object_id")

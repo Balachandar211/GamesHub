@@ -1,6 +1,5 @@
 from django.contrib import admin
-
-# Register your models here.
-from .models import GameInteraction
+from .models import GameInteraction, Review
 
 admin.site.register(GameInteraction)
+admin.site.register(Review)

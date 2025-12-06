@@ -111,7 +111,8 @@ class BaseStoreObjectsView(APIView):
         return response
         
     def post(self, request):
-        model_name  = self.model.__name__.lower()
+        model_name     = self.model.__name__.lower()
+        cache_base_key = model_name + request.user.get_username()
         if self.model.objects.filter(user = request.user).exists():
             return Response({"message":f"{model_name} already exists for user use PATCH method"}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -122,12 +123,14 @@ class BaseStoreObjectsView(APIView):
         modelSerialData = self.serializer_class(data = request.data)
         if modelSerialData.is_valid():
             modelSerialData.save(user = request.user)
+            delete_cache_key(cache_base_key)
             return Response({"message":f"{model_name} saved successfully"}, status=status.HTTP_201_CREATED)
         else:
             return Response({"error":{"code":f"new_{model_name}_error", "details":modelSerialData.errors}}, status=status.HTTP_400_BAD_REQUEST)
     
     def patch(self, request):
         model_name  = self.model.__name__.lower()
+        cache_base_key = model_name + request.user.get_username()
 
         check_response = self.check_games(request, model_name)
         if check_response is not None:
@@ -138,14 +141,17 @@ class BaseStoreObjectsView(APIView):
         modelSerialData = self.serializer_class(modelObj, data = request.data, partial = True)
         if modelSerialData.is_valid():
             modelSerialData.save()
+            delete_cache_key(cache_base_key)
             return Response({"message": f"{model_name} updated successfully"}, status= status.HTTP_202_ACCEPTED)
         else:
             return Response({"error":{"code":f"update_{model_name}_error", "details":modelSerialData.errors}}, status=status.HTTP_400_BAD_REQUEST)
     
     def delete(self, request):
+        cache_base_key = model_name + request.user.get_username()
         model_name  = self.model.__name__.lower()
         modelObj = self.get_object(request)
         modelObj.delete()
+        delete_cache_key(cache_base_key)
         return Response({"message":f"{model_name} for user deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
     
 
@@ -288,9 +294,10 @@ def sale_view(request):
         except UnsupportedMediaType as e:
             return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         except Exception as e:
-            print(e)
             return Response({"error":{"code": f"sale_endpoint_error","message": "internal server error"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
+
+
 @api_view(["GET", "PATCH", "DELETE"])
 @permission_classes([IsAdminOrReadOnly])
 @parser_classes([MultiPartParser])

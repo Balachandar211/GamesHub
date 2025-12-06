@@ -5,6 +5,7 @@ import requests
 import os
 from django.core.cache import cache
 from django.db.models import Q
+from .models import UpvoteDownvoteControl
 
 redis_client = cache.client.get_client()
 
@@ -126,3 +127,55 @@ def mail_service(Subject, message, recepients):
                 return True, "Email sent successfully"
             else:
                 return False, "Email sending failed"
+            
+
+def validate_vote_value(attrs, model):
+    upvote = attrs.get(f"upvote_{model}")
+    downvote = attrs.get(f"downvote_{model}")
+
+    truthy = ['1', 1, True, "true"]
+
+    if upvote in truthy and downvote in truthy:
+        return True
+
+    return False
+
+
+def update_voting_field(instance, validated_data, content_type, model, request_user):
+
+    upvote_downvote, created  = UpvoteDownvoteControl.objects.get_or_create(user=request_user,content_type=content_type,object_id=instance.id)
+
+    if created:
+        if validated_data.get(f"upvote_{model}") in ['1', 1, True, "true"]:
+            upvote_downvote.set_vote_type(True)
+            upvote_downvote.save()
+            instance.upvote += 1
+        if validated_data.get(f"downvote_{model}") in ['1', 1, True, "true"]:
+            instance.downvote += 1
+            upvote_downvote.set_vote_type(False)
+            upvote_downvote.save()
+    else:
+        vote_type   = upvote_downvote.get_vote_type()
+
+        if validated_data.get(f"upvote_{model}") in ['1', 1, True, "true"] and not vote_type:
+            upvote_downvote.set_vote_type(True)
+            upvote_downvote.save()
+            instance.upvote += 1
+            instance.downvote -= 1
+        if validated_data.get(f"downvote_{model}") in ['1', 1, True, "true"] and vote_type:
+            instance.downvote += 1
+            instance.upvote -= 1
+            upvote_downvote.set_vote_type(False)
+            upvote_downvote.save()
+        
+        if validated_data.get(f"upvote_{model}") in ['1', 1, True, "true"] and vote_type:
+            instance.upvote -= 1
+            upvote_downvote.delete()
+        
+        if validated_data.get(f"downvote_{model}") in ['1', 1, True, "true"] and not vote_type:
+            instance.downvote -= 1
+            upvote_downvote.delete()
+
+    return instance
+    
+

@@ -2,6 +2,11 @@ from rest_framework.serializers import ModelSerializer, ValidationError, Seriali
 from .models import Post, Comment
 from rest_framework import serializers
 import re
+from utills.microservices import validate_vote_value, update_voting_field
+from django.contrib.contenttypes.models import ContentType
+
+POST_CONTENT_TYPE    = ContentType.objects.get_for_model(Post)
+COMMENT_CONTENT_TYPE = ContentType.objects.get_for_model(Comment)
 
 class CommentSerializer(ModelSerializer):
 
@@ -25,14 +30,6 @@ class PostSerializer(ModelSerializer):
         model            = Post
         fields           = ["id", "title", "body", "created_at", "user", "hashtags", "comments", "upvote", "downvote"]
         read_only_fields = ["user"]
-
-    def update(self, instance, validated_data):
-        if validated_data.get("upvote") in ['1', 1, True, "true"]:
-            instance.upvote += 1
-        if validated_data.get("downvote") in ['1', 1, True, "true"]:
-            instance.downvote += 1
-        
-        return super().update(instance, validated_data)
 
     def validate_title(self, value):
         for pattern in [re.compile(r"(?i)\bass\b"), re.compile(r"(?i)\bfuck\b"), re.compile(r"(?i)\bbitch\b"), re.compile(r"(?i)\basshole\b"),]:
@@ -60,11 +57,15 @@ class PostDetailSerializer(PostSerializer):
         model            = Post
         fields           = ["title", "body", "upvote", "downvote", "upvote_post", "downvote_post"]
 
+    def validate(self, attrs):
+        if validate_vote_value(attrs, "post"):
+            raise ValidationError("Only one of upvote_post or downvote_post can be set.")
+
+        return attrs
+
     def update(self, instance, validated_data):
-        if validated_data.get("upvote_post") in ['1', 1, True, "true"]:
-            instance.upvote += 1
-        if validated_data.get("downvote_post") in ['1', 1, True, "true"]:
-            instance.downvote += 1
+        request_user = self.context.get('request_user')
+        instance = update_voting_field(instance, validated_data, POST_CONTENT_TYPE, "post", request_user)
 
         return super().update(instance, validated_data)
 
@@ -77,9 +78,13 @@ class CommentDetailSerializer(CommentSerializer):
         fields           = ["body", "upvote", "downvote", "upvote_comment", "downvote_comment"]
     
     def update(self, instance, validated_data):
-        if validated_data.get("upvote_comment") in ['1', 1, True, "true"]:
-            instance.upvote += 1
-        if validated_data.get("downvote_comment") in ['1', 1, True, "true"]:
-            instance.downvote += 1
+        request_user = self.context.get('request_user')
+        instance = update_voting_field(instance, validated_data, COMMENT_CONTENT_TYPE, "comment", request_user)
 
         return super().update(instance, validated_data)
+    
+    def validate(self, attrs):
+        if validate_vote_value(attrs, "comment"):
+            raise ValidationError("Only one of upvote_post or downvote_post can be set.")
+
+        return attrs

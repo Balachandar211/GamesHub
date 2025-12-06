@@ -1,18 +1,8 @@
-from django.db.models.signals import post_delete, post_save, pre_save
+from django.db.models.signals import post_delete,  pre_save
 from django.dispatch import receiver
-from utills.microservices import delete_cache_key
-from .models import Wishlist, Cart, Sale, Game
+from .models import Sale, Game
 from utills.storage_supabase import delete_from_supabase
 
-@receiver(post_delete, sender=Wishlist)
-@receiver(post_save, sender=Wishlist)
-def clear_user_cache(sender, instance, **kwargs):
-    delete_cache_key("wishlist")
-
-@receiver(post_delete, sender=Cart)
-@receiver(post_save, sender=Cart)
-def clear_user_cache(sender, instance, **kwargs):
-    delete_cache_key("cart")
 
 @receiver(post_delete, sender=Game)
 @receiver(post_delete, sender=Sale)
