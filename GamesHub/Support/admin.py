@@ -1,3 +1,6 @@
 from django.contrib import admin
+from .models import Report, Ticket, BanUser
 
-# Register your models here.
+admin.site.register(Report)
+admin.site.register(Ticket)
+admin.site.register(BanUser)

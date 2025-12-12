@@ -157,7 +157,7 @@ CACHES = {
 
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.getenv("XATA_DB"),
+        default=os.getenv("PRISMA_DB"),
         engine="django.db.backends.postgresql"
     )
 }

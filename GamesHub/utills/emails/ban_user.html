@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>GamesHub Account Ban</title>
+</head>
+  <body>
+    <p><b>Dear {{ username }},</b></p>
+
+    <p>
+      We are writing to inform you that your account has been temporarily suspended 
+      for <strong>30 days</strong>.
+    </p>
+
+    <p>
+      This action was taken due to repeated violations of our community guidelines 
+      related to the following content type:
+      <strong>{{ content_type_model }}</strong>.
+    </p>
+
+    <p>
+      During this suspension period, you will not be able to access your account 
+      or use any features associated with it.
+    </p>
+
+    <p>
+      Please be aware that if your account is banned more than 
+      <strong>two times</strong>, it may result in the 
+      <strong>permanent deletion</strong> of your account and all associated data.
+    </p>
+
+    <p>
+    This is your <strong>{{ ban_ordinal }}</strong> ban on our platform.
+    </p>
+
+    <p>
+      If you believe this action was taken in error or have any questions, 
+      you may contact our support team for further clarification.
+    </p>
+
+    <p><b>Best regards,<br>
+    GamesHub Support Team</b></p>
+  </body>
+</html>

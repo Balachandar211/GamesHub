@@ -4,7 +4,7 @@ from Store.serializers import gamesSerializer
 import requests
 import os
 from django.core.cache import cache
-from django.db.models import Q
+from django.db.models import Q, F
 from .models import UpvoteDownvoteControl
 
 redis_client = cache.client.get_client()
@@ -14,6 +14,10 @@ def delete_cache_key(base_key):
 
     if keys:
         redis_client.delete(*keys)
+    
+    if base_key == "comment":
+        delete_cache_key("post")
+        delete_cache_key("ticket")
 
 
 # Microservice for Search
@@ -141,7 +145,7 @@ def validate_vote_value(attrs, model):
     return False
 
 
-def update_voting_field(instance, validated_data, content_type, model, request_user):
+def update_voting_field(instance, validated_data, content_type, model, request_user, model_obj):
 
     upvote_downvote, created  = UpvoteDownvoteControl.objects.get_or_create(user=request_user,content_type=content_type,object_id=instance.id)
 
@@ -149,33 +153,33 @@ def update_voting_field(instance, validated_data, content_type, model, request_u
         if validated_data.get(f"upvote_{model}") in ['1', 1, True, "true"]:
             upvote_downvote.set_vote_type(True)
             upvote_downvote.save()
-            instance.upvote += 1
+            model_obj.update(upvote=F('upvote') + 1)
         if validated_data.get(f"downvote_{model}") in ['1', 1, True, "true"]:
-            instance.downvote += 1
             upvote_downvote.set_vote_type(False)
             upvote_downvote.save()
+            model_obj.update(downvote=F('downvote') + 1)
     else:
         vote_type   = upvote_downvote.get_vote_type()
 
         if validated_data.get(f"upvote_{model}") in ['1', 1, True, "true"] and not vote_type:
             upvote_downvote.set_vote_type(True)
             upvote_downvote.save()
-            instance.upvote += 1
-            instance.downvote -= 1
+            model_obj.update(upvote=F('upvote') + 1, downvote=F('downvote') - 1)
         if validated_data.get(f"downvote_{model}") in ['1', 1, True, "true"] and vote_type:
-            instance.downvote += 1
-            instance.upvote -= 1
             upvote_downvote.set_vote_type(False)
             upvote_downvote.save()
+            model_obj.update(upvote=F('upvote') - 1, downvote=F('downvote') + 1)
         
         if validated_data.get(f"upvote_{model}") in ['1', 1, True, "true"] and vote_type:
-            instance.upvote -= 1
             upvote_downvote.delete()
+            model_obj.update(upvote=F('upvote') - 1)
         
         if validated_data.get(f"downvote_{model}") in ['1', 1, True, "true"] and not vote_type:
-            instance.downvote -= 1
             upvote_downvote.delete()
+            model_obj.update(downvote=F('downvote') - 1)
 
+
+    instance.refresh_from_db(fields=['upvote', 'downvote'])
     return instance
     
 

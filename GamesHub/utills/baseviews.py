@@ -25,7 +25,7 @@ class CustomPagination(LimitOffsetPagination):
 
 class BaseListCreateView(ListCreateAPIView):
     pagination_class   = CustomPagination
-    cache_timeout      = 600
+    cache_timeout      = 3600
     permission_classes = [IsAuthenticatedOrReadOnly]
     
     def handle_exception(self, exc):
@@ -38,14 +38,15 @@ class BaseListCreateView(ListCreateAPIView):
 
     def list(self, request, *args, **kwargs):
         base_key = self.model.__name__.lower()
+        user_id  = request.user.id
         query_params = request.GET.dict()
         sorted_pairs = str(sorted(tuple(query_params.items()), key=lambda x: x[1].lower()))
 
         parent_pk = kwargs.get("pk")
         if parent_pk:
-            cache_key = f"{base_key}_{parent_pk}_{sorted_pairs}"
+            cache_key = f"{base_key}_{parent_pk}_{user_id}_{sorted_pairs}"
         else:
-            cache_key = f"{base_key}_{sorted_pairs}"
+            cache_key = f"{base_key}_{user_id}_{sorted_pairs}"
         cached_page = cache.get(cache_key)
 
         if cached_page is not None:
@@ -57,7 +58,6 @@ class BaseListCreateView(ListCreateAPIView):
         response = self.get_paginated_response(serializer.data)
         cache.set(cache_key, response.data, self.cache_timeout)
         return response
-
     
     def get_queryset(self):
         return self.model.objects.all().order_by("-created_at")
@@ -70,25 +70,27 @@ class BaseListCreateView(ListCreateAPIView):
 
     def create(self, request, *args, **kwargs):
         base_key = self.model.__name__.lower()
+
+        extra_kwargs = self.get_extra_save_kwargs(request, *args, **kwargs)
         serializer = self.serializer_class(data=request.data)
         
         if not serializer.is_valid():
             return Response({"error": {"code": "validation_errors", "details": serializer.errors}},status=status.HTTP_400_BAD_REQUEST)
         
-        extra_kwargs = self.get_extra_save_kwargs(request, *args, **kwargs)
         serializer.save(user=request.user, **extra_kwargs)
         delete_cache_key(base_key)
-        return Response({"message": f"{self.model.__name__} has been saved successfully", self.model.__name__: serializer.data}, status=status.HTTP_200_OK)
+        return Response({"message": f"{self.model.__name__} has been saved successfully", self.model.__name__: serializer.data}, status=status.HTTP_201_CREATED)
 
 class BaseRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
     permission_classes = [IsOwnerOrReadOnly]
     http_method_names  = ["get", "patch", "delete"]
-    cache_timeout      = 600
+    cache_timeout      = 3600
 
     def retrieve(self, request, *args, **kwargs):
+        user_id  = request.user.id
         base_key = self.model.__name__.lower()
         parent_pk = kwargs.get("pk")
-        cache_key = f"{base_key}_{parent_pk}"
+        cache_key = f"{base_key}_{parent_pk}_{user_id}"
         
         cached_page = cache.get(cache_key)
 
@@ -106,14 +108,13 @@ class BaseRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
 
     def update(self, request, *args, **kwargs):
         base_key = self.model.__name__.lower()
-        partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial, context={'request_user': request.user})
+        serializer = self.get_serializer(instance, data=request.data, partial=True, context={'request_user': request.user})
         serializer.is_valid(raise_exception=True)
         
         self.perform_update(serializer)
         delete_cache_key(base_key)
-        return Response({"message": f"{self.model.__name__} updated successfully","data": serializer.data}, status=status.HTTP_200_OK)
+        return Response({"message": f"{self.model.__name__} updated successfully","data": serializer.data}, status=status.HTTP_202_ACCEPTED)
 
     def destroy(self, request, *args, **kwargs):
         base_key = self.model.__name__.lower()

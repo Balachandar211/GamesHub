@@ -38,3 +38,12 @@ def validate_email_email(context):
 
 def wallet_recharge_successful_email(context):
     return render_to_string("wallet_recharge_successful.html", context=context)
+
+def ban_user_email(context):
+    return render_to_string("ban_user.html", context=context)
+
+def ban_user_deletion_email(context):
+    return render_to_string("permanent_deletion_after_ban.html", context=context)
+
+def ticket_resolution_email(context):
+    return render_to_string("ticket_resolution.html", context=context)

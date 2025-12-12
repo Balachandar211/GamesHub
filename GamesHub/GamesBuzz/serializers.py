@@ -25,13 +25,14 @@ class ReviewSerializer(ModelSerializer):
 
     def validate(self, attrs):
         if validate_vote_value(attrs, "review"):
-            raise ValidationError("Only one of upvote_post or downvote_post can be set.")
+            raise ValidationError("Only one of upvote_review or downvote_review can be set.")
 
         return attrs
 
     def update(self, instance, validated_data):
         request_user = self.context.get('request_user')
-        instance = update_voting_field(instance, validated_data, REVIEW_CONTENT_TYPE, "review", request_user)
+        model_obj    = Review.objects.filter(id = instance.id)
+        instance = update_voting_field(instance, validated_data, REVIEW_CONTENT_TYPE, "review", request_user, model_obj)
 
         return super().update(instance, validated_data)
 

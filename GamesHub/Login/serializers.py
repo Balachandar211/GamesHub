@@ -18,12 +18,22 @@ class userSerializer(ModelSerializer):
             'is_active': {'default': True}
         }
 
+    def validate_username(self, username):
+        if bool(re.match(r"^[A-Za-z0-9@!$]+$", username)):
+            return username
+        raise ValidationError("Only letters, numbers, and the special characters @, !, and $ are allowed. Spaces and other special characters are not permitted.")
+
     
     def validate_password(self, rawPassword):
-        return make_password(rawPassword)
+        if bool(re.match(r"^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$", rawPassword)):
+            return make_password(rawPassword)
+        raise ValidationError("Your password needs at least 8 characters, including an uppercase letter, a number, and a special character.")
 
     def validate_profilePicture(self, profilePicture):
         valid_mime_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+        max_size = 1024 * 1024
+        if profilePicture and profilePicture.size > max_size:
+            raise ValidationError("profile picture file size must not exceed 1 MB.")
         if profilePicture and profilePicture.content_type not in valid_mime_types:
             raise ValidationError("Only image files (JPEG, PNG, GIF, WEBP, JPG) are allowed.")
         if profilePicture:
@@ -31,6 +41,7 @@ class userSerializer(ModelSerializer):
             return public_url
         return None
     
+   
     def validate_phoneNumber(self, value):
         if value:
             value = re.sub(r'\D', '', value) if not value.startswith('+') else value

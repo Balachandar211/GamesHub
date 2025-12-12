@@ -1,4 +1,3 @@
-from rest_framework.generics import RetrieveUpdateDestroyAPIView
 from .models import Post, Comment
 from .serializers import PostSerializer, CommentSerializer, PostDetailSerializer, CommentDetailSerializer
 from rest_framework.exceptions import NotFound
@@ -13,8 +12,21 @@ class PostListCreateView(BaseListCreateView):
     serializer_class = PostSerializer
     parser_classes   = [MultiPartParser]
 
+    def get_queryset(self):
+        qs = self.model.objects.prefetch_related("media", "hashtags").order_by("-created_at")
+        request = self.request
+        hashtag = request.query_params.get("hashtag")
+        username = request.query_params.get("username")
+        if hashtag:
+            hashtag = hashtag.lower().strip()
+            qs = qs.filter(hashtags__tag__iexact=hashtag)
+        if username:
+            qs = qs.filter(user__username__iexact=username)
+        return qs.distinct()
+    
     def get_extra_save_kwargs(self, request, *args, **kwargs):
         return {}
+    
 
 class CommentListCreateView(BaseListCreateView):
     model            = Comment
@@ -39,7 +51,7 @@ class CommentListCreateView(BaseListCreateView):
 class PostRetrieveUpdateDestroyView(BaseRetrieveUpdateDestroyView):
     model            = Post
     serializer_class = PostDetailSerializer
-    parser_classes     = [MultiPartParser]
+    parser_classes   = [MultiPartParser]
 
 class CommentRetrieveUpdateDestroyView(BaseRetrieveUpdateDestroyView):
     model            = Comment

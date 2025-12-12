@@ -11,6 +11,7 @@ from utills.storage_supabase import upload_file_to_supabase
 import re
 from rest_framework.exceptions import APIException, UnsupportedMediaType
 from django.db.models import Q
+from django.core.exceptions import ValidationError
 from utills.game_media_update import populate_gamemedia
 User = get_user_model()
 
@@ -338,7 +339,8 @@ def game_media_admin(request):
             game_media_updated[id] = f"game obj with id {id} does not exist"
         except UnsupportedMediaType as e:
             return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
-        
+        except ValidationError as e:
+            game_media_updated[id] = e
         except Exception as e:
             return Response({"error":{"code":"auto_upload_fail", "message":"errors in automatic game media population"}, "updated_games":game_media_updated}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     

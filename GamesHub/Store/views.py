@@ -166,7 +166,6 @@ class UserWishlist(BaseStoreObjectsView):
     paginate_serializer = gamesSerializerSimplified
 
 
-#Possible bug have to clear out later
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def featuredPage(request):

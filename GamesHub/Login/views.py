@@ -25,6 +25,8 @@ from django.core import signing
 from django.core.signing import BadSignature, SignatureExpired
 from drf_spectacular.utils import extend_schema
 from django.core.cache import cache
+from utills.permissions import IsSuperuser
+from Support.models import BanUser
 User = get_user_model()
 
 EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
@@ -90,7 +92,7 @@ def SignUp(request):
     if request.data.get("email") is None:
         return Response({"error": {"code":"not_null_constraint", "message":"email cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
 
-    allowed_keys = ['username', 'email', 'password', 'first_name', 'last_name', 'profilePicture', 'email', 'phoneNumber']
+    allowed_keys = ['username', 'email', 'password', 'first_name', 'last_name', 'profilePicture', 'phoneNumber']
 
     if not set(request.data.keys()).issubset(allowed_keys):
         unexpected = set(request.data.keys()) - set(allowed_keys)
@@ -157,6 +159,9 @@ def Login(request):
     try:
         userObj = User.objects.get(username__iexact = request.data.get("username"))
 
+        if BanUser.objects.filter(user=userObj).exists() and not userObj.is_active:
+            return Response({"error": {"code":"login_refused", "message":"requested user is banned in this platform"}}, status=status.HTTP_400_BAD_REQUEST)
+
         if not userObj.is_active:
             return Response({"error": {"code":"recovery_needed", "message":"requested user is inactive please send a recovery request"}}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -184,7 +189,7 @@ def Login(request):
 
             return response
         else:
-            return Response({"error":{"code":"invalid_credentials", "message":"incorrect password for user"}}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error":{"code":"invalid_credentials", "message":"incorrect password for user"}}, status=status.HTTP_403_FORBIDDEN)
     except User.DoesNotExist:
         return Response({"error":{"code":"username_not_found", "message":"requested username not found"}}, status=status.HTTP_404_NOT_FOUND)
     
@@ -213,9 +218,7 @@ def Forgot_Password(request):
                 return Response({"error": {"code":"not_null_constraint", "message":"password cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
 
             if secrets.compare_digest(str(otp), str(gen_otp)) and (time_gen + 300 >= int(time.time())):
-                if password is None or password == '':
-                    return Response({"error": {"code":"not_null_constraint", "message":"password cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
-
+                
                 userObj.set_password(password)
                 userObj.save()
                 otpObj.delete()
@@ -374,9 +377,15 @@ def delete_user(request):
 
         gen_otp, time_gen = otpObj.get_details()
 
+        password = request.data.get("password")
+
+        if password is None or password == '':
+            return Response({"error": {"code":"not_null_constraint", "message":"password cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+
+
         if secrets.compare_digest(str(otp), str(gen_otp)) and (time_gen + 300 >= int(time.time())):
             if request.data.get("delete_permanently")  and (request.data.get("delete_permanently") in (True, "true", "1", 1)):
-                if check_password(request.data.get("password"), userObj.get_password()):
+                if check_password(password, userObj.get_password()):
                     userObj.delete()
                     otpObj.delete()
 
@@ -384,7 +393,7 @@ def delete_user(request):
                     message      = user_deletion_confirmation({"username":username})
                     response_msg = "user account deleted permanently"
                 else:
-                    return Response({"error":{"code":"invalid_credentials", "message":"incorrect password for user account"}}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({"error":{"code":"invalid_credentials", "message":"incorrect password for user account"}}, status=status.HTTP_403_FORBIDDEN)
        
             else:
                 userObj.change_status()
@@ -404,8 +413,7 @@ def delete_user(request):
         
         return Response({"error":{"code":"otp_invalid_or_expired","message":"OTP either expired or incorrect"}}, status=status.HTTP_400_BAD_REQUEST)
 
-
-        
+   
 
 @update_user_schema
 @api_view(["PATCH"])
@@ -466,12 +474,15 @@ def recover_user(request):
 
     if username is None or username == '':
         return Response({"error": {"code":"not_null_constraint", "message":"username cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+    
+    userObj  = User.objects.get(username__iexact = username)
 
+    if BanUser.objects.filter(user=userObj).exists() and not userObj.is_active:
+        return Response({"error": {"code":"recovery_refused", "message":"requested user is banned in this platform"}}, status=status.HTTP_400_BAD_REQUEST)
 
     if "OTP" in request.data:
         otp      = request.data.get("OTP")
         try:
-            userObj  = User.objects.get(username__iexact = username)
 
             try:
                 otpObj   = OTP.objects.get(account = username)
@@ -501,7 +512,7 @@ def recover_user(request):
 
                     return Response({"message": f"account recovery successful"}, status=status.HTTP_202_ACCEPTED)
                 else:
-                    return Response({"error":{"code":"invalid_credentials", "message":"incorrect password provided"}}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({"error":{"code":"invalid_credentials", "message":"incorrect password provided"}}, status=status.HTTP_403_FORBIDDEN)
             else:
                 return Response({"error":{"code":"otp_invalid_or_expired","message":"OTP either expired or incorrect"}}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -511,7 +522,6 @@ def recover_user(request):
     
     else:
         try:
-            userObj  = User.objects.get(username__iexact = username)
             email_id = userObj.get_email()
 
             otp_num  = secrets.randbelow(900000) + 100000
@@ -531,5 +541,123 @@ def recover_user(request):
 
             return Response({"message":f"OTP sent successfully"}, status=status.HTTP_201_CREATED)
         
+        except User.DoesNotExist:
+            return Response({"error":{"code":"username_not_found", "message":"requested username not found"}}, status=status.HTTP_404_NOT_FOUND)
+
+
+def validate_admin_fields(flag, flag_name):
+    if flag is None:
+        return Response({"error":{"code":"not_null_constraint", "message":f"{flag_name} cannot be null"}}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if flag not in [1, 0, '1', '0', True, False]:
+        return Response({"error":{"code":"incorrect_data_type", "message":f"{flag_name} should have 1 and 0 or True and False only as flags"}}, status=status.HTTP_400_BAD_REQUEST)
+    
+    return None
+
+@api_view(["GET", "POST", "PATCH", "DELETE"])
+@permission_classes([IsSuperuser])
+def admin_user_creation(request):
+    if request.method == "GET":
+        users = User.objects.filter(is_staff = True)
+        userSerial = userSerializer(users, many = True)
+        return Response({"message":"available admins", "admins":userSerial.data}, status=status.HTTP_200_OK)
+
+    if request.method == "POST":        
+        super_user_flag    = request.data.get("super_user_flag")
+
+        super_user_return  = validate_admin_fields(super_user_flag, "super_user_flag")
+
+        if super_user_return:
+            return super_user_return
+
+        username = request.data.get("username")
+        
+        if username is None:
+            return Response({"error": {"code":"not_null_constraint", "message":"username cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+
+        if User.objects.filter(username__iexact = username).exists():
+            return Response({"error":{"code":"username_integrity_error", "message":"username already exists please update in PATCH endpoint"}}, status=status.HTTP_409_CONFLICT)
+    
+        email = request.data.get("email")
+
+        if email is None:
+            return Response({"error": {"code":"not_null_constraint", "message":"email cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+
+        allowed_keys = ['username', 'email', 'password', 'first_name', 'last_name', 'super_user_flag']
+
+        if not set(request.data.keys()).issubset(allowed_keys):
+            unexpected = set(request.data.keys()) - set(allowed_keys)
+            return Response({"error": {"code":"forbidden_keys", "message":f"unexpected keys {unexpected}"}}, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+        try:
+            email_check_response = requests.get(f"https://emailreputation.abstractapi.com/v1/?api_key={EMAIL_CHECKER_API_KEY}&email={email}", timeout=5)
+            
+            email_check_response = email_check_response.json()
+            if not email_check_response["email_deliverability"]["is_smtp_valid"]:
+                return  Response({"error":{"code": "invalid_email", "message":"incorrect email id provided"}}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        except (requests.RequestException, ValueError):
+            return  Response({"error":{"code":"mail_reputation_server_not_reachable", "message":"email validation service unavailable"}}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        user_serial = userSerializer(data= request.data)
+
+        if user_serial.is_valid():
+            user_serial.save(is_staff = True, is_superuser = super_user_flag)
+            return Response({"message":"admin user created successfully"}, status=status.HTTP_201_CREATED)
+        
+        return Response({"error":{"code":"validation_error", "details":user_serial.errors}}, status=status.HTTP_400_BAD_REQUEST)
+
+
+    if request.method == "PATCH":
+        username = request.data.get("username")
+
+        if username is None:
+            return Response({"error": {"code":"not_null_constraint", "message":"username cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(username__iexact = username)
+        except User.DoesNotExist:
+            return Response({"error":{"code":"username_not_found", "message":"requested username not found"}}, status=status.HTTP_404_NOT_FOUND)
+
+        
+        if request.data.get("remove_admin_user_status") in [1, '1', True]:
+            user.is_staff     = False
+            user.is_superuser = False
+            user.save()
+            return Response({"message":"admin user updated successfully"}, status=status.HTTP_202_ACCEPTED)
+        elif request.data.get("remove_super_user_status") in [1, '1', True]:
+            user.is_superuser = False
+            user.save()
+            return Response({"message":"admin user updated successfully"}, status=status.HTTP_202_ACCEPTED)
+        else:
+            super_user_flag    = request.data.get("super_user_flag")
+
+            super_user_return  = validate_admin_fields(super_user_flag, "super_user_flag")
+
+            if super_user_return:
+                return super_user_return
+            
+            user.is_staff     = True
+            user.is_superuser = super_user_flag
+            user.save()
+            return Response({"message":"admin user updated successfully"}, status=status.HTTP_202_ACCEPTED)
+        
+    if request.method == "DELETE":
+        try:
+            username = request.data.get("username")
+
+            if username is None:
+                return Response({"error": {"code":"not_null_constraint", "message":"username cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+
+            password = request.data.get("password")
+
+            if password is None or password == '':
+                return Response({"error": {"code":"not_null_constraint", "message":"password cannot be none"}}, status=status.HTTP_400_BAD_REQUEST)
+
+            if check_password(password, request.user.get_password()):
+                User.objects.get(username = username).delete()
+                return Response({"message": "admin user deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+            return Response({"error":{"code":"invalid_credentials", "message":"incorrect superuser password provided"}}, status=status.HTTP_403_FORBIDDEN)
+
         except User.DoesNotExist:
             return Response({"error":{"code":"username_not_found", "message":"requested username not found"}}, status=status.HTTP_404_NOT_FOUND)

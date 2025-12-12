@@ -66,6 +66,21 @@ class GamesMedia(models.Model):
     media_type     = models.PositiveSmallIntegerField(default= 0, choices=MEDIA_CHOICES, null=True, blank=True) 
     url            = models.URLField(null=True, default=None, blank=True)
 
+    def clean(self):
+        existing_media = GamesMedia.objects.filter(game=self.game)
+
+        screenshot_count = existing_media.filter(media_type=1).count()
+        youtube_count = existing_media.filter(media_type=2).count()
+
+        if self.media_type == 1 and screenshot_count >= 10:
+            raise ValidationError("a game can only have 5 screenshots linked.")
+        if self.media_type == 2 and youtube_count >= 2:
+            raise ValidationError("a game can only have 1 YouTube video linked.")
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.get_media_type_display()} for {self.game.get_name()}"
 

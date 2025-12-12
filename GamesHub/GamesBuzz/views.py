@@ -17,10 +17,8 @@ from django.db import transaction, IntegrityError
 from rest_framework.exceptions import UnsupportedMediaType
 from decimal import Decimal
 from utills.baseviews import BaseRetrieveUpdateDestroyView, BaseListCreateView
-from django.contrib.contenttypes.models import ContentType
 from rest_framework.exceptions import NotFound
 from rest_framework.exceptions import ValidationError as RestValidationError
-REVIEW_CONTENT_TYPE = ContentType.objects.get_for_model(GameInteraction)
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])

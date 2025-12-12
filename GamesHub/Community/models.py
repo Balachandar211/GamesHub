@@ -4,6 +4,7 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericRelation
 from django.contrib.auth import get_user_model
+from utills.storage_supabase import supabase
 User = get_user_model()
 
 
@@ -17,8 +18,8 @@ class Post(models.Model):
     user          = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_constraint=False)
     title         = models.CharField(max_length=256, null=False, blank=False)
     body          = models.TextField(max_length=4096, null=False, blank=False)
-    created_at    = models.DateField(auto_now_add=True)
-    hashtags      = models.ManyToManyField(HashTags, editable=False)
+    created_at    = models.DateTimeField(auto_now_add=True)
+    hashtags      = models.ManyToManyField(HashTags, editable=False, related_name="hastags")
     comments      = GenericRelation("Comment", related_query_name="post")
     upvote        = models.PositiveBigIntegerField(default=0, editable=False)
     downvote      = models.PositiveBigIntegerField(default=0, editable=False)
@@ -31,7 +32,7 @@ class Post(models.Model):
         hashtags = []
 
         for match in matches:
-            hashtag, _ = HashTags.objects.get_or_create(tag=match)
+            hashtag, _ = HashTags.objects.get_or_create(tag=match.strip().lower())
             hashtags.append(hashtag)
 
         self.hashtags.set(hashtags)
@@ -62,13 +63,13 @@ class Comment(models.Model):
         return f"Comment for {self.parent_object.title}"
 
 class PostMedia(models.Model):
-    MEDIA_CHOICES = [
-        (1, 'Screen_Shot'),
-        (2, 'Gameplay')
-        ]
-    post           = models.ForeignKey(Post, on_delete=models.CASCADE)
-    media_type     = models.PositiveSmallIntegerField(default= 0, choices=MEDIA_CHOICES, null=True, blank=True) 
+    post           = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="media")
     url            = models.URLField(null=True, default=None, blank=True)
 
+    def get_url(self):
+        media  = self.url.split("GamesHubMedia/")[1]
+        result = supabase.storage.from_("GamesHubMedia").create_signed_url(media, 600)
+        return result["signedURL"]
+
     def __str__(self):
-        return f"{self.get_media_type_display()} for {self.game}"
+        return f"media for {self.post}"
