@@ -27,6 +27,7 @@ from drf_spectacular.utils import extend_schema
 from django.core.cache import cache
 from utills.permissions import IsSuperuser
 from Support.models import BanUser
+from GamesHub.settings import CACHE_ENV
 User = get_user_model()
 
 EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
@@ -36,7 +37,7 @@ EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def profile(request):
-    cache_key = "user" + request.user.get_username()
+    cache_key = CACHE_ENV + "user" + request.user.get_username()
     cache_val = cache.get(cache_key)
 
     if cache_val:

@@ -47,3 +47,6 @@ def ban_user_deletion_email(context):
 
 def ticket_resolution_email(context):
     return render_to_string("ticket_resolution.html", context=context)
+
+def unblock_user_email(context):
+    return render_to_string("unblock_user_confirmation.html", context=context)

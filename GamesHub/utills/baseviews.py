@@ -8,6 +8,7 @@ from rest_framework.exceptions import NotFound
 from .microservices import delete_cache_key
 from .permissions import IsOwnerOrReadOnly
 from rest_framework.exceptions import ValidationError as RestValidationError
+from GamesHub.settings import CACHE_ENV
 
 
 class CustomPagination(LimitOffsetPagination):
@@ -44,9 +45,9 @@ class BaseListCreateView(ListCreateAPIView):
 
         parent_pk = kwargs.get("pk")
         if parent_pk:
-            cache_key = f"{base_key}_{parent_pk}_{user_id}_{sorted_pairs}"
+            cache_key = f"{CACHE_ENV}_{base_key}_{parent_pk}_{user_id}_{sorted_pairs}"
         else:
-            cache_key = f"{base_key}_{user_id}_{sorted_pairs}"
+            cache_key = f"{CACHE_ENV}_{base_key}_{user_id}_{sorted_pairs}"
         cached_page = cache.get(cache_key)
 
         if cached_page is not None:
@@ -90,7 +91,7 @@ class BaseRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
         user_id  = request.user.id
         base_key = self.model.__name__.lower()
         parent_pk = kwargs.get("pk")
-        cache_key = f"{base_key}_{parent_pk}_{user_id}"
+        cache_key = f"{CACHE_ENV}_{base_key}_{parent_pk}_{user_id}"
         
         cached_page = cache.get(cache_key)
 

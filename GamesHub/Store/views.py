@@ -25,6 +25,7 @@ from rest_framework.views import exception_handler
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.parsers import MultiPartParser
 import copy
+from GamesHub.settings import CACHE_ENV
 User = get_user_model()
 
 
@@ -33,7 +34,7 @@ def get_cache_key(request):
     sorted_pairs = str(sorted(tuple(query_params.items()), key=lambda x: x[1].lower()))
     username   = request.user.get_username()
 
-    return  username + sorted_pairs
+    return CACHE_ENV + username + sorted_pairs
 
 def get_paginated(request, objects, serializer):
     paginator              = LimitOffsetPagination()
@@ -96,7 +97,7 @@ class BaseStoreObjectsView(APIView):
 
     def get(self, request):
         model_name  = self.model.__name__.lower()
-        cache_key   = model_name + get_cache_key(request)
+        cache_key   = CACHE_ENV + model_name + get_cache_key(request)
         model_name  = self.model.__name__.lower()
         cache_val   = cache.get(cache_key)
 

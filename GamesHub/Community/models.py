@@ -15,7 +15,7 @@ class HashTags(models.Model):
         return self.tag
 
 class Post(models.Model):
-    user          = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_constraint=False)
+    user          = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     title         = models.CharField(max_length=256, null=False, blank=False)
     body          = models.TextField(max_length=4096, null=False, blank=False)
     created_at    = models.DateTimeField(auto_now_add=True)
@@ -41,15 +41,15 @@ class Post(models.Model):
 
 
     def __str__(self):
-        try:
+        if self.user is not None:
             user = self.user.get_username()
-        except User.DoesNotExist:
+        else:
             user = "Deleted User"
         return self.title + " by " + user
 
 
 class Comment(models.Model):
-    user          = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_constraint=False)
+    user          = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     body          = models.TextField(null=False, max_length=4096)
     content_type  = models.ForeignKey(ContentType,on_delete=models.CASCADE)
     object_id     = models.PositiveIntegerField()

@@ -6,8 +6,9 @@ from django.utils import timezone
 from Store.models import Game
 from django.contrib.auth import get_user_model
 from GamesHub import settings
-from .email_helper import promotional_email, account_deletion_confirmation_email
+from .email_helper import promotional_email, account_deletion_confirmation_email, unblock_user_email
 from datetime import date
+from Support.models import BanUser
 User = get_user_model()
 
 @app.task(name='send_daily_promotional_email')
@@ -57,4 +58,25 @@ def delete_deleted_users():
             if not mail_result:
                 return "mailer service failed"
     
+    return "Deleted deleted users of more than 30 days"
+
+@app.task(name="unblock_banned_users")
+def unblock_banned_users():
+    timeLine     = timezone.now().date() - settings.BAN_USER_TIME
+    banned_users = BanUser.objects.filter(baned_date = timeLine, ban_count__lt = 3)
+    
+    for banned_user in banned_users:
+        user      = banned_user.user
+        user_name = user.get_username()
+        email     = user.get_email()
+        user.change_status()
+        user.save()
+
+        message   = unblock_user_email({"user_name": user_name, "unblocked_date": date.today()})
+
+        mail_result, _ = mail_service(Subject="Account Unblock Notice", message=message, recepients=[email])
+
+        if not mail_result:
+            return "mailer service failed"
+
     return "Deleted deleted users of more than 30 days"

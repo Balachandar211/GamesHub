@@ -19,6 +19,7 @@ from decimal import Decimal
 from utills.baseviews import BaseRetrieveUpdateDestroyView, BaseListCreateView
 from rest_framework.exceptions import NotFound
 from rest_framework.exceptions import ValidationError as RestValidationError
+from GamesHub.settings import CACHE_ENV
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -165,9 +166,9 @@ def buy(request):
 @api_view(["GET"])
 def games_detail(request, pk):
     if request.user.is_authenticated:
-        key = "game" + request.user.get_username() + str(pk)
+        key = CACHE_ENV + "game" + request.user.get_username() + str(pk)
     else:
-        key = "game" + "anonymous_user" + str(pk)
+        key = CACHE_ENV + "game" + "anonymous_user" + str(pk)
 
     cached_game = cache.get(key)
     if cached_game:
@@ -183,11 +184,11 @@ def games_detail(request, pk):
             gameInteractionUser           = GameInteraction.objects.filter(Q(game = game) & Q(user = request.user))
             library_flag                  = gameInteractionUser.exists()
 
-            key = "game" + request.user.get_username() + str(pk)
+            key = CACHE_ENV + "game" + request.user.get_username() + str(pk)
         else:
             library_flag                  = False
 
-            key = "game" + "anonymous_user" + str(pk)
+            key = CACHE_ENV + "game" + "anonymous_user" + str(pk)
 
         gameSerialData = gamesSerializer(game)
         gameData       = gameSerialData.data

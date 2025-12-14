@@ -121,7 +121,7 @@ class WalletTransaction(models.Model):
         (3, "payment")
     ]
 
-    wallet           = models.ForeignKey(Wallet, on_delete=models.DO_NOTHING, db_constraint=False)
+    wallet           = models.ForeignKey(Wallet, on_delete=models.SET_NULL, null=True)
     transaction_type = models.PositiveSmallIntegerField(choices=TRANSACTION_TYPE, editable=False)
     amount           = models.DecimalField(default=Decimal('0.00'), decimal_places=2, max_digits=12, validators=[MinValueValidator(Decimal('0.00'))])
     created_at       = models.DateTimeField(auto_now_add=True)
@@ -149,9 +149,9 @@ class WalletTransaction(models.Model):
             return super().save(*args, **kwargs)
     
     def __str__(self):
-        try:
+        if self.wallet.user is not None:
             user = self.wallet.user.get_username()
-        except Wallet.DoesNotExist:
+        else:
             user = "Deleted User"
         return f"{self.get_payment_type_display()} for user {user}"
     

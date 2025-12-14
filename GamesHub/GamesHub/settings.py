@@ -100,6 +100,12 @@ REDIS_CLIENT = redis.from_url(
     decode_responses=True
 )
 
+if DEBUG:
+    CACHE_ENV = "dev"
+else:
+    CACHE_ENV = "prod"
+
+
 ALLOWED_HOSTS = ["gameshub-test.onrender.com", "localhost"]
 
 CELERY_BROKER_URL = os.getenv('REDIS_DB_URL')
@@ -157,7 +163,7 @@ CACHES = {
 
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.getenv("PRISMA_DB"),
+        default=os.getenv("AIVEN_DB"),
         engine="django.db.backends.postgresql"
     )
 }
@@ -173,6 +179,7 @@ SIMPLE_JWT = {
 }
 
 USER_RECOVERABLE_TIME = timedelta(days=30)
+BAN_USER_TIME         = timedelta(days=0)
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'

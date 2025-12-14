@@ -16,14 +16,14 @@ class Report(models.Model):
         (3, 'Closed'),
         (4, 'Resolved')
     ]
-    user            = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_constraint=False)
+    user            = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     body            = models.TextField(null=False, max_length=4096)
     content_type    = models.ForeignKey(ContentType,on_delete=models.CASCADE)
     object_id       = models.PositiveIntegerField()
     parent_object   = GenericForeignKey("content_type", "object_id")
     created_at      = models.DateTimeField(auto_now_add=True)
     status          = models.PositiveSmallIntegerField(default= 1, choices=STATUS, null=True, blank=True)
-    assigned_staff  = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_constraint=False, null=True, blank=True, related_name="assigned_staff_report")
+    assigned_staff  = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="assigned_staff_report")
     resolution_date = models.DateTimeField(null=True, blank=True, editable=False)
     admin_comment   = models.TextField(null=True, max_length=4096)
 
@@ -52,14 +52,14 @@ class Ticket(models.Model):
         (3, 'Closed'),
         (4, 'Resolved')
     ]
-    user            = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_constraint=False)
-    game            = models.ForeignKey(Game, on_delete=models.DO_NOTHING, db_constraint=False, null=True, blank=True)
+    user            = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    game            = models.ForeignKey(Game, on_delete=models.SET_NULL, null=True, blank=True)
     issue_type      = models.PositiveSmallIntegerField(default= 3, choices=ISSUE_TYPE, null=True, blank=True)
     status          = models.PositiveSmallIntegerField(default= 1, choices=STATUS, null=True, blank=True)
     description     = models.TextField(max_length=4096, null=False)
     evidence        = models.URLField(null=True, default=None, blank=True)
     created_at      = models.DateTimeField(auto_now_add=True)
-    assigned_staff  = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_constraint=False, null=True, blank=True, related_name="assigned_staff_ticket")
+    assigned_staff  = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="assigned_staff_ticket")
     resolution_date = models.DateTimeField(null=True, blank=True, editable=False)
     admin_comment   = models.TextField(null=True, max_length=4096)
     comments        = GenericRelation("Community.Comment", related_query_name="ticket")
@@ -76,9 +76,9 @@ class Ticket(models.Model):
     
 
 class BanUser(models.Model):
-    user          = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_constraint=False)
+    user          = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     ban_count     = models.PositiveIntegerField(default=0)
-    baned_date    = models.DateTimeField()
+    baned_date    = models.DateField()
 
     def save(self, *args, **kwargs):
         self.ban_count += 1
@@ -89,9 +89,9 @@ class BanUser(models.Model):
         return self.ban_count
 
     def __str__(self):
-        try:
+        if self.user is not None:
             user = self.user.get_username()
-        except User.DoesNotExist:
+        else:
             user = "Deleted User"
         return f"{user} banned {self.ban_count} times"
 
