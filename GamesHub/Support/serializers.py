@@ -4,6 +4,7 @@ import re
 from django.contrib.auth import get_user_model
 from utills.storage_supabase import supabase, upload_file_to_supabase
 from Community.serializers import CommentSerializer
+from GamesBuzz.models import GameInteraction
 User = get_user_model()
 
 
@@ -43,10 +44,12 @@ class TicketSerializer(ReportSerializer):
 class UserTicketSerializer(TicketSerializer):
     comments      = SerializerMethodField()
     evidence      = FileField(write_only = True, allow_null=True, required=False, default=None)
+
     class Meta:
         model            = Ticket
         fields           = ["id", "issue_type", "status", "description", "evidence", "evidence_url", "comments"]
-        read_only_fields = ["issue_type", "status", "id"]
+        read_only_fields = ["status", "id"]
+
 
     def validate_evidence(self, evidence):
         valid_mime_types = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"]
@@ -58,16 +61,26 @@ class UserTicketSerializer(TicketSerializer):
 
         return evidence
     
-    def create(self, validated_data):
+
+    def upload_evidence(self, validated_data, ticket):
         evidence = validated_data.pop("evidence", None)
-
-        ticket = super().create(validated_data)
-
         if evidence:
             folder = f"evidence/{ticket.pk}"
             public_url = upload_file_to_supabase(evidence, folder)
             ticket.evidence = public_url
-            ticket.save(update_fields=["evidence"])
+            ticket.save()
+        
+        return ticket
+
+    def create(self, validated_data):
+        ticket = super().create(validated_data)
+        ticket = self.upload_evidence(validated_data, ticket)
+
+        return ticket
+    
+    def update(self, instance, validated_data):
+        ticket = super().update(instance, validated_data)
+        ticket = self.upload_evidence(validated_data, ticket)
 
         return ticket
 
@@ -101,7 +114,6 @@ class UserTicketResolveSerializer(ModelSerializer):
     def update(self, instance, validated_data):
         assigned_staff = self.context.pop("assigned_staff", None)
         if assigned_staff is not None or instance.assigned_staff is None:
-            print(assigned_staff)
             instance.assigned_staff = assigned_staff
             instance.status         = 2
         return super().update(instance, validated_data)

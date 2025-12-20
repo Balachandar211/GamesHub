@@ -12,7 +12,7 @@ class GameInteraction(models.Model):
     in_library     = models.BooleanField(default=True)
 
     class Meta:
-        unique_together = ('user', 'game') 
+        unique_together = ('user', 'game', 'in_library') 
 
     def get_transaction_id(self):
         return self.transaction_id

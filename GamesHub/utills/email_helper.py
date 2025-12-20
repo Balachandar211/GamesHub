@@ -50,3 +50,6 @@ def ticket_resolution_email(context):
 
 def unblock_user_email(context):
     return render_to_string("unblock_user_confirmation.html", context=context)
+
+def ticket_refund_email(context):
+    return render_to_string("ticket_refund_success.html", context=context)

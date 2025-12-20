@@ -107,11 +107,7 @@ class GameMediaSerializer(ModelSerializer):
         fields = ('id', 'media_type', 'signed_url')
 
     def get_signed_url(self, obj):
-        if obj.url is not None and obj.media_type != 2:
-            url_path = obj.url.split("GamesHubMedia/")[1]
-            result = supabase.storage.from_("GamesHubMedia").create_signed_url(url_path, 600)
-            return result["signedURL"]
-        return obj.url
+        return obj.get_signed_url()
     
 class WalletSerializer(ModelSerializer):
     

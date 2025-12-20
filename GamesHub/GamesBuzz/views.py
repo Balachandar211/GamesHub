@@ -17,10 +17,20 @@ from django.db import transaction, IntegrityError
 from rest_framework.exceptions import UnsupportedMediaType
 from decimal import Decimal
 from utills.baseviews import BaseRetrieveUpdateDestroyView, BaseListCreateView
+from Support.models import Ticket
+from Support.serializers import UserTicketSerializer
 from rest_framework.exceptions import NotFound
 from rest_framework.exceptions import ValidationError as RestValidationError
+from rest_framework.parsers import MultiPartParser
+from django.utils import timezone
+from datetime import timedelta
 from GamesHub.settings import CACHE_ENV
+import logging
+from .documentation import purchase_schema, buy_schema, games_detail_schema, review_create_schema, review_list_schema, review_delete_schema, review_retrieve_schema, review_update_schema, game_ticket_create_schema
 
+logger = logging.getLogger("gameshub") 
+
+@purchase_schema
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def purchase(request):
@@ -45,7 +55,8 @@ def purchase(request):
             except GameInteraction.DoesNotExist:
                 to_buy[id]   = gamesSerializerSimplified(gameObj).data
                 total_price += gameObj.get_price()
-            except Exception:
+            except Exception as e:
+                logger.error(f"purchase endpoint failure: {str(e)}", exc_info=True)
                 return Response({"error":{"code":"purchase_section_fail", "message":"errors in purchase section"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Game.DoesNotExist:
             na_list[id]  = "Game not available enter valid id"
@@ -54,7 +65,8 @@ def purchase(request):
         except UnsupportedMediaType as e:
             return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         
-        except Exception:
+        except Exception as e:
+            logger.error(f"purchase endpoint failure: {str(e)}", exc_info=True)
             return Response({"error":{"code":"purchase_section_fail", "message":"errors in purchase section"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
      
     endpoint = reverse('buy')
@@ -77,7 +89,7 @@ def buy_atomic(request, use_wallet, wallet):
         try:
             gameObj      = Game.objects.get(id = id)
             try:
-                GameInteraction.objects.get(game = gameObj, user = request.user)
+                GameInteraction.objects.get(game = gameObj, user = request.user, in_library = True)
                 na_list[id]  = "Game already available in library"
             except GameInteraction.DoesNotExist:
                 try:
@@ -121,7 +133,7 @@ def buy_atomic(request, use_wallet, wallet):
 
     return transaction_ids, games_bought, total, response_message, na_list
 
-
+@buy_schema
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def buy(request):
@@ -144,6 +156,7 @@ def buy(request):
     except ValueError as e:
         return Response({"error": {"code": "insufficient_funds", "message": str(e)}},status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
+        logger.error(f"buy endpoint failure: {str(e)}", exc_info=True)
         return Response({"error":{"code":"internal_buying_point_error", "message":"internal server error"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     if len(transaction_ids) > 0:
@@ -162,13 +175,13 @@ def buy(request):
 
     return Response({"message":response_message, "important_note":"these are not actual purchases", "transaction_ids":transaction_ids, "errors":na_list}, status=status.HTTP_200_OK)
        
-
+@games_detail_schema
 @api_view(["GET"])
 def games_detail(request, pk):
     if request.user.is_authenticated:
-        key = CACHE_ENV + "game" + request.user.get_username() + str(pk)
+        key = f"{CACHE_ENV}:game:{request.user.get_username()}:{str(pk)}"
     else:
-        key = CACHE_ENV + "game" + "anonymous_user" + str(pk)
+        key = f"{CACHE_ENV}:game:anonymous_user:{str(pk)}"
 
     cached_game = cache.get(key)
     if cached_game:
@@ -184,11 +197,9 @@ def games_detail(request, pk):
             gameInteractionUser           = GameInteraction.objects.filter(Q(game = game) & Q(user = request.user))
             library_flag                  = gameInteractionUser.exists()
 
-            key = CACHE_ENV + "game" + request.user.get_username() + str(pk)
         else:
             library_flag                  = False
 
-            key = CACHE_ENV + "game" + "anonymous_user" + str(pk)
 
         gameSerialData = gamesSerializer(game)
         gameData       = gameSerialData.data
@@ -198,15 +209,18 @@ def games_detail(request, pk):
         return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         
     except Exception as e:
+        logger.error(f"game detail endpoint failure: {str(e)}", exc_info=True)
         return Response({"error":{"code":"game_detail_failed", "message":"please try back later"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
     response = Response({"message": f"game detail for pk {pk}", "in_library":library_flag, "game":gameData, "game_media":gameMediaSerial.data}, status=status.HTTP_200_OK)
     
-    cache.set(key, response.data, timeout=3600)
+    cache.set(key, response.data, timeout=600)
 
     return Response({"message": f"game detail for pk {pk}", "in_library":library_flag, "game":gameData, "game_media":gameMediaSerial.data}, status=status.HTTP_200_OK)
 
+@review_list_schema
+@review_create_schema
 class ReviewListCreateView(BaseListCreateView):
     model            = Review
     serializer_class = ReviewSerializer
@@ -234,7 +248,9 @@ class ReviewListCreateView(BaseListCreateView):
             
         return {"game": gameobj}
     
-
+@review_retrieve_schema
+@review_update_schema
+@review_delete_schema
 class ReviewRetrieveUpdateDestroyView(BaseRetrieveUpdateDestroyView):
     model            = Review
     serializer_class = ReviewSerializer
@@ -248,7 +264,56 @@ class ReviewRetrieveUpdateDestroyView(BaseRetrieveUpdateDestroyView):
         except Game.DoesNotExist:
             raise NotFound(f"requested game with pk {pk} not found")
         except Review.DoesNotExist:
-            raise NotFound(f"requested review with pk {pk} not linked to Post {object_id}")
+            raise NotFound(f"requested review with pk {pk} not linked to game {object_id}")
         self.check_object_permissions(self.request, obj)
         return obj
 
+@game_ticket_create_schema
+class GameTicketCreateView(BaseListCreateView):
+    model             = Ticket
+    serializer_class  = UserTicketSerializer
+    http_method_names = ["post"]
+    parser_classes    = [MultiPartParser]
+
+    def get_extra_save_kwargs(self, request, *args, **kwargs):
+        try:
+            parent_object   = Game.objects.get(pk = kwargs.get("pk"))
+            game_interation = GameInteraction.objects.get(user = request.user, game = parent_object, in_library = True)
+        except Game.DoesNotExist:
+            raise NotFound(f"requested Game with pk {kwargs.get("pk")} not found")
+        except GameInteraction.DoesNotExist:
+            raise RestValidationError("user doesn't have this game in his library")
+        
+        return {"game": parent_object, "library_object":game_interation}
+    
+    def create(self, request, *args, **kwargs):     
+        issue_type = request.data.get("issue_type")
+
+        try:
+            issue_type = int(issue_type)
+        except:
+            return Response({"error": {"code": "validation_errors", "details": "issue type should be passed as 1 or 2 when raising an issue on a game"}},status=status.HTTP_400_BAD_REQUEST)
+        
+        if issue_type is None or issue_type not in [1, 2]:
+            return Response({"error": {"code": "validation_errors", "details": "issue type should be passed as 1 or 2 when raising an issue on a game"}},status=status.HTTP_400_BAD_REQUEST)
+           
+        extra_kwargs = self.get_extra_save_kwargs(request, *args, **kwargs)
+
+        if GameInteraction.objects.filter(user= request.user, game = extra_kwargs["game"]).count() > 1 and issue_type == 1:
+            return Response({"error": {"code":"duplicate_transaction", "message":"user already returned this game in a previous ticket and got a refund can't process a refund again"}},status=status.HTTP_400_BAD_REQUEST)
+
+        base_key = self.model.__name__.lower()
+
+        serializer = self.serializer_class(data=request.data)
+
+        game_interation = extra_kwargs.pop("library_object")
+        
+        if game_interation.purchase_date + timedelta(days = 14) < timezone.now():
+            return Response({"error":{"code":"warranty_ended", "message":"requested game cannot be returned as ticket is raised after 14 days of buying game"}}, status=status.HTTP_404_NOT_FOUND)
+                    
+        if not serializer.is_valid():
+            return Response({"error": {"code": "validation_errors", "details": serializer.errors}},status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer.save(user=request.user, **extra_kwargs)
+        delete_cache_key(base_key)
+        return Response({"message": f"{self.model.__name__} has been saved successfully", self.model.__name__: serializer.data}, status=status.HTTP_201_CREATED)

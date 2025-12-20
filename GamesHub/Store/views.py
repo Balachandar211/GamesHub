@@ -8,7 +8,8 @@ from .models import Game, Cart, Wishlist, Wallet, WalletTransaction, Sale
 from .serializers import CartSerializer, WishlistSerializer, gamesSerializerSimplified, WalletSerializer, WalletTransactionSerializer, SaleSerializer, SaleSerializerDetail
 from django.contrib.auth import get_user_model
 from utills.microservices import search, mail_service, delete_cache_key
-from .documentation import cart_delete_schema, cart_get_schema, cart_patch_schema, cart_post_schema, whishlist_delete_schema, whishlist_get_schema, whishlist_patch_schema, whishlist_post_schema
+from .documentation import user_cart_delete_schema, user_cart_get_schema, user_cart_patch_schema, user_cart_post_schema, user_wishlist_delete_schema, user_wishlist_get_schema, user_wishlist_patch_schema, user_wishlist_post_schema,\
+featured_page_schema, home_get_schema, library_get_schema, wallet_get_schema, wallet_post_schema, wallet_transaction_get_schema, sale_get_schema, sale_post_schema, sale_detail_delete_schema, sale_detail_get_schema, sale_detail_patch_schema
 from GamesHub.settings import REDIS_CLIENT
 from GamesBuzz.models import GameInteraction
 from GamesBuzz.serializers import GameInteractionSerializerSimplified
@@ -26,6 +27,9 @@ from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.parsers import MultiPartParser
 import copy
 from GamesHub.settings import CACHE_ENV
+import logging
+
+logger = logging.getLogger("gameshub") 
 User = get_user_model()
 
 
@@ -34,7 +38,7 @@ def get_cache_key(request):
     sorted_pairs = str(sorted(tuple(query_params.items()), key=lambda x: x[1].lower()))
     username   = request.user.get_username()
 
-    return CACHE_ENV + username + sorted_pairs
+    return f"{CACHE_ENV}:{username}:{sorted_pairs}"
 
 def get_paginated(request, objects, serializer):
     paginator              = LimitOffsetPagination()
@@ -42,12 +46,14 @@ def get_paginated(request, objects, serializer):
     objectSerial           = serializer(paginated_transactions, many=True).data
     return objectSerial, paginator.get_next_link(), paginator.get_previous_link(), paginator.count
 
+@home_get_schema
 @api_view(["GET"])
 def Home(request):
     try:
         gamesSerial, get_next_link, get_previous_link, count = search(request, None)
         return Response({"message": "user catalogue", "count":count,  "next": get_next_link, "previous": get_previous_link, "catalogue":gamesSerial}, status=status.HTTP_200_OK)
     except Exception as e:
+        logger.error(f"exception in store home: {str(e)}", exc_info=True)
         return Response({"error":{"code":"game_fetch_error", "message":"internal server error"}, "game":[]}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
@@ -97,7 +103,7 @@ class BaseStoreObjectsView(APIView):
 
     def get(self, request):
         model_name  = self.model.__name__.lower()
-        cache_key   = CACHE_ENV + model_name + get_cache_key(request)
+        cache_key   = f"{CACHE_ENV}:{model_name}:{get_cache_key(request)}"
         model_name  = self.model.__name__.lower()
         cache_val   = cache.get(cache_key)
 
@@ -113,7 +119,7 @@ class BaseStoreObjectsView(APIView):
         
     def post(self, request):
         model_name     = self.model.__name__.lower()
-        cache_base_key = model_name + request.user.get_username()
+        cache_base_key = f"{model_name}:{request.user.get_username()}"
         if self.model.objects.filter(user = request.user).exists():
             return Response({"message":f"{model_name} already exists for user use PATCH method"}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -131,7 +137,7 @@ class BaseStoreObjectsView(APIView):
     
     def patch(self, request):
         model_name  = self.model.__name__.lower()
-        cache_base_key = model_name + request.user.get_username()
+        cache_base_key = f"{model_name}:{request.user.get_username()}"
 
         check_response = self.check_games(request, model_name)
         if check_response is not None:
@@ -148,25 +154,32 @@ class BaseStoreObjectsView(APIView):
             return Response({"error":{"code":f"update_{model_name}_error", "details":modelSerialData.errors}}, status=status.HTTP_400_BAD_REQUEST)
     
     def delete(self, request):
-        cache_base_key = model_name + request.user.get_username()
+        cache_base_key = f"{model_name}:{request.user.get_username()}"
         model_name  = self.model.__name__.lower()
         modelObj = self.get_object(request)
         modelObj.delete()
         delete_cache_key(cache_base_key)
         return Response({"message":f"{model_name} for user deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
     
-
+@user_cart_post_schema
+@user_cart_patch_schema
+@user_cart_get_schema
+@user_cart_delete_schema
 class UserCart(BaseStoreObjectsView):
     model               = Cart
     serializer_class    = CartSerializer
     paginate_serializer = gamesSerializerSimplified
 
+@user_wishlist_post_schema
+@user_wishlist_patch_schema
+@user_wishlist_delete_schema
+@user_wishlist_get_schema
 class UserWishlist(BaseStoreObjectsView):
     model               = Wishlist
     serializer_class    = WishlistSerializer
     paginate_serializer = gamesSerializerSimplified
 
-
+@featured_page_schema
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def featuredPage(request):
@@ -183,15 +196,14 @@ def featuredPage(request):
         gameObjsSerial = gamesSerializerSimplified(gameObjs, many=True).data
     except redis.ConnectionError:
         return Response({"error": {"code":"not_available", "message":"featured temporarily unavailable please try back later"}, "games": []}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    except UnsupportedMediaType as e:
-        return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         
     except Exception as e:
+        logger.error(f"featured page error: {str(e)}", exc_info=True)
         return Response({"error": {"code":"not_available", "message":"featured temporarily unavailable please try back later"}, "games": []}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     return Response({"message": "featured games for user", "games":gameObjsSerial}, status=status.HTTP_200_OK)
 
-
+@library_get_schema
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def library(request):
@@ -206,6 +218,8 @@ def library(request):
     return response
 
 
+@wallet_post_schema
+@wallet_get_schema
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def wallet(request):
@@ -259,7 +273,7 @@ def wallet(request):
         return Response({"message":"wallet recharged successfully", "wallet":walletSerial}, status=status.HTTP_200_OK)
 
 
-
+@wallet_transaction_get_schema
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def wallet_transaction(request):
@@ -275,6 +289,8 @@ def wallet_transaction(request):
     return Response({"message":"wallet transaction details for user", "next":cache_vals[1], "previous":cache_vals[2], "count":cache_vals[3], "transactions":cache_vals[0]}, status=status.HTTP_200_OK)
     
 
+@sale_post_schema
+@sale_get_schema
 @api_view(["GET", "POST"])
 @permission_classes([IsAdminOrReadOnly])
 @parser_classes([MultiPartParser])
@@ -294,10 +310,13 @@ def sale_view(request):
         except UnsupportedMediaType as e:
             return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         except Exception as e:
+            logger.error(f"sale view errot: {str(e)}", exc_info=True)
             return Response({"error":{"code": f"sale_endpoint_error","message": "internal server error"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
+@sale_detail_patch_schema
+@sale_detail_get_schema
+@sale_detail_delete_schema
 @api_view(["GET", "PATCH", "DELETE"])
 @permission_classes([IsAdminOrReadOnly])
 @parser_classes([MultiPartParser])
@@ -310,9 +329,9 @@ def sale_detail_view(request, pk):
         except Sale.DoesNotExist:
             return Response({"error": {"code": "do_not_exist","message": f"sale object do not exist"}}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
+            logger.error(f"sale detail view get error: {str(e)}", exc_info=True)
             return Response({"error": {"code":"manage_sale_failed", "message":"errors in sale manage get endpoint"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-
     if request.method == "PATCH":
         try:
             sale        = Sale.objects.get(pk = pk)
@@ -327,6 +346,7 @@ def sale_detail_view(request, pk):
         except Sale.DoesNotExist:
             return Response({"error": {"code": "do_not_exist","message": f"sale object do not exist"}}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
+            logger.error(f"sale detail view patch error: {str(e)}", exc_info=True)
             return Response({"error": {"code":"manage_sale_failed", "message":"errors in sale manage patch endpoint"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     if request.method == "DELETE":
@@ -336,5 +356,6 @@ def sale_detail_view(request, pk):
         except Sale.DoesNotExist:
             return Response({"error": {"code": "do_not_exist","message": f"sale object do not exist"}}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
+            logger.error(f"sale detail view delete error: {str(e)}", exc_info=True)
             return Response({"error": {"code":"manage_sale_failed", "message":"errors in sale manage delete endpoint"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         

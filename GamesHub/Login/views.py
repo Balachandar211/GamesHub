@@ -15,7 +15,7 @@ import requests
 import os
 from utills.models import BlacklistedAccessToken
 from django.utils import timezone
-from .documentation import signup_schema, login_schema, extend_session_schema, update_user_schema, logout_session_schema, recover_user_schema, delete_user_schema, forgot_password_schema, profile_schema, validate_email_schema
+from .documentation import signup_schema, login_schema, extend_session_schema, update_user_schema, logout_session_schema, recover_user_schema, delete_user_schema, forgot_password_schema, profile_schema, validate_email_schema, admin_user_get_schema, admin_user_delete_schema, admin_user_patch_schema, admin_user_post_schema
 from GamesHub.settings import COOKIE_LIFETIME
 from utills.email_helper import signup_email, forgot_password_email, password_change_success_email, account_recovery_success_email, recover_account_email, user_deletion_email, user_deletion_confirmation, recoverable_deletion_confirmation, validate_email_email
 from rest_framework_simplejwt.exceptions import TokenError
@@ -28,6 +28,9 @@ from django.core.cache import cache
 from utills.permissions import IsSuperuser
 from Support.models import BanUser
 from GamesHub.settings import CACHE_ENV
+import logging
+
+logger = logging.getLogger("gameshub") 
 User = get_user_model()
 
 EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
@@ -37,7 +40,7 @@ EMAIL_CHECKER_API_KEY = os.getenv("EMAIL_CHECKER_API_KEY")
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def profile(request):
-    cache_key = CACHE_ENV + "user" + request.user.get_username()
+    cache_key = f"{CACHE_ENV}:user:{request.user.get_username()}"
     cache_val = cache.get(cache_key)
 
     if cache_val:
@@ -461,6 +464,7 @@ def update_user(request):
 
             return Response({"message": "user updated successfully!"}, status=status.HTTP_202_ACCEPTED)
     except Exception as e:
+        logger.error(f"user update failed: {str(e)}", exc_info=True)
         return  Response({"error":{"code":"user_update_failed", "message":"user object update failed"}}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         
@@ -555,6 +559,11 @@ def validate_admin_fields(flag, flag_name):
     
     return None
 
+
+@admin_user_post_schema
+@admin_user_patch_schema
+@admin_user_delete_schema
+@admin_user_get_schema
 @api_view(["GET", "POST", "PATCH", "DELETE"])
 @permission_classes([IsSuperuser])
 def admin_user_creation(request):

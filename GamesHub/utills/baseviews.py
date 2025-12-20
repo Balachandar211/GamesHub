@@ -8,6 +8,7 @@ from rest_framework.exceptions import NotFound
 from .microservices import delete_cache_key
 from .permissions import IsOwnerOrReadOnly
 from rest_framework.exceptions import ValidationError as RestValidationError
+from .microservices import delete_cache_key
 from GamesHub.settings import CACHE_ENV
 
 
@@ -42,12 +43,13 @@ class BaseListCreateView(ListCreateAPIView):
         user_id  = request.user.id
         query_params = request.GET.dict()
         sorted_pairs = str(sorted(tuple(query_params.items()), key=lambda x: x[1].lower()))
+        path         = request.path
 
         parent_pk = kwargs.get("pk")
         if parent_pk:
-            cache_key = f"{CACHE_ENV}_{base_key}_{parent_pk}_{user_id}_{sorted_pairs}"
+            cache_key = f"{CACHE_ENV}:{base_key}:{path}:{parent_pk}:{user_id}:{sorted_pairs}"
         else:
-            cache_key = f"{CACHE_ENV}_{base_key}_{user_id}_{sorted_pairs}"
+            cache_key = f"{CACHE_ENV}:{base_key}:{path}:{user_id}:{sorted_pairs}"
         cached_page = cache.get(cache_key)
 
         if cached_page is not None:
@@ -87,12 +89,14 @@ class BaseRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
     http_method_names  = ["get", "patch", "delete"]
     cache_timeout      = 3600
 
-    def retrieve(self, request, *args, **kwargs):
-        user_id  = request.user.id
-        base_key = self.model.__name__.lower()
+    def get_cache_key(self, *args, **kwargs):
+        user_id   = self.request.user.id
+        base_key  = self.model.__name__.lower()
         parent_pk = kwargs.get("pk")
-        cache_key = f"{CACHE_ENV}_{base_key}_{parent_pk}_{user_id}"
-        
+        return f"{CACHE_ENV}:{base_key}:{parent_pk}:{user_id}"
+
+    def retrieve(self, request, *args, **kwargs):
+        cache_key   = self.get_cache_key(self, *args, **kwargs)
         cached_page = cache.get(cache_key)
 
         if cached_page is not None:
@@ -108,20 +112,21 @@ class BaseRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
         return Response(data, status=status.HTTP_200_OK)
 
     def update(self, request, *args, **kwargs):
-        base_key = self.model.__name__.lower()
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=True, context={'request_user': request.user})
         serializer.is_valid(raise_exception=True)
         
+        cache_key   = self.get_cache_key(self, *args, **kwargs)
+
         self.perform_update(serializer)
-        delete_cache_key(base_key)
+        delete_cache_key(cache_key)
         return Response({"message": f"{self.model.__name__} updated successfully","data": serializer.data}, status=status.HTTP_202_ACCEPTED)
 
     def destroy(self, request, *args, **kwargs):
-        base_key = self.model.__name__.lower()
         instance = self.get_object()
-        self.perform_destroy(instance)
-        delete_cache_key(base_key)
+        self.perform_destroy(instance)        
+        cache_key   = self.get_cache_key(self, *args, **kwargs)
+        delete_cache_key(cache_key)
         return Response({"message": f"{self.model.__name__} deleted successfully"},status=status.HTTP_204_NO_CONTENT)
     
     def handle_exception(self, exc):

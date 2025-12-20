@@ -4,9 +4,12 @@ from rest_framework.exceptions import NotFound
 from django.contrib.contenttypes.models import ContentType
 from utills.baseviews import BaseListCreateView, BaseRetrieveUpdateDestroyView
 from rest_framework.parsers import MultiPartParser
+from .documentation import post_create_schema, post_list_schema, comment_create_schema, comment_list_schema, comment_delete_schema, comment_retrieve_schema, comment_update_schema, post_delete_schema, post_retrieve_schema, post_update_schema
 
 POST_CONTENT_TYPE = ContentType.objects.get_for_model(Post)
 
+@post_list_schema
+@post_create_schema
 class PostListCreateView(BaseListCreateView):
     model            = Post
     serializer_class = PostSerializer
@@ -28,6 +31,8 @@ class PostListCreateView(BaseListCreateView):
         return {}
     
 
+@comment_list_schema
+@comment_create_schema
 class CommentListCreateView(BaseListCreateView):
     model            = Comment
     serializer_class = CommentSerializer
@@ -47,12 +52,17 @@ class CommentListCreateView(BaseListCreateView):
         return {"parent_object": parent_object}
 
 
-
+@post_update_schema
+@post_retrieve_schema
+@post_delete_schema
 class PostRetrieveUpdateDestroyView(BaseRetrieveUpdateDestroyView):
     model            = Post
     serializer_class = PostDetailSerializer
     parser_classes   = [MultiPartParser]
 
+@comment_update_schema
+@comment_retrieve_schema
+@comment_delete_schema
 class CommentRetrieveUpdateDestroyView(BaseRetrieveUpdateDestroyView):
     model            = Comment
     serializer_class = CommentDetailSerializer

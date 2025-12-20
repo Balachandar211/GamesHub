@@ -51,7 +51,7 @@ class Game(models.Model):
         if self.cover_picture is not None:
             try:
                 cover_picture_path = self.cover_picture.split("GamesHubMedia/")[1]
-                result = supabase.storage.from_("GamesHubMedia").create_signed_url(cover_picture_path, 600)
+                result = supabase.storage.from_("GamesHubMedia").create_signed_url(cover_picture_path, 900)
                 return result["signedURL"]
             except Exception as e:
                 return None
@@ -80,6 +80,13 @@ class GamesMedia(models.Model):
     def save(self, *args, **kwargs):
         self.clean()
         super().save(*args, **kwargs)
+
+    def get_signed_url(self):
+        if self.media_type != 2:
+            url_path = self.url.split("GamesHubMedia/")[1]
+            result = supabase.storage.from_("GamesHubMedia").create_signed_url(url_path, 900)
+            return result["signedURL"]
+        return self.url
 
     def __str__(self):
         return f"{self.get_media_type_display()} for {self.game.get_name()}"

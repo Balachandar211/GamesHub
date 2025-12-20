@@ -79,4 +79,4 @@ def unblock_banned_users():
         if not mail_result:
             return "mailer service failed"
 
-    return "Deleted deleted users of more than 30 days"
+    return "Unblocked blocked users of more than 30 days"

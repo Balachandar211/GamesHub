@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>GamesHub Refund Confirmation</title>
+</head>
+<body>
+    <p><b>Dear {{ username }},</b></p>
+
+    <p>
+      We are writing to inform you that your support ticket 
+      <strong>#{{ ticket_id }}</strong> has been successfully 
+      <strong>processed</strong>.
+    </p>
+
+    <p>
+      Issue Type: <strong>{{ issue_type }}</strong><br>
+      Description: <strong>{{ description }}</strong>
+    </p>
+
+    <p>
+      As part of the resolution, a refund of 
+      <strong>{{ refund_amount }}</strong> has been credited to your 
+      GamesHub wallet. Your updated wallet balance is now 
+      <strong>{{ wallet_balance }}</strong>.
+    </p>
+
+    <p>
+      You may use the refunded amount for future purchases within GamesHub. 
+      If you encounter any discrepancies or have further questions regarding 
+      this refund, please feel free to reopen the ticket or create a new one.
+    </p>
+
+    <p>
+      Thank you for your patience and cooperation throughout this process.
+    </p>
+
+    <p><b>Best regards,<br>
+    GamesHub Support Team</b></p>
+</body>
+</html>

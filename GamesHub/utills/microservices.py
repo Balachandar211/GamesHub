@@ -11,7 +11,7 @@ from GamesHub.settings import CACHE_ENV
 redis_client = cache.client.get_client()
 
 def delete_cache_key(base_key):
-    keys = list(redis_client.scan_iter(f":1:{base_key}*"))
+    keys = list(redis_client.scan_iter(f":1:{CACHE_ENV}:{base_key}*"))
 
     if keys:
         redis_client.delete(*keys)
@@ -26,7 +26,7 @@ def search(request, game_ids):
     path_key = request.path
 
     paginator = LimitOffsetPagination()
-    cache_key   = CACHE_ENV + "game" + path_key + "CACHED_GAMES"
+    cache_key   = f"{CACHE_ENV}:game:{path_key}:CACHED_GAMES"
     cached_vals = cache.get(cache_key)
 
     if not request.GET and cached_vals and not game_ids:
@@ -41,11 +41,11 @@ def search(request, game_ids):
         gamesSerial = gamesSerial.data
         cache_vals  = gamesSerial, paginator.get_next_link(), paginator.get_previous_link(), paginator.count
         if not game_ids:
-            cache.set(cache_key, cache_vals, timeout=2592000)
+            cache.set(cache_key, cache_vals, timeout=600)
     else:
         query_params = request.GET.dict()
         sorted_pairs = str(sorted(tuple(query_params.items()), key=lambda x: x[1].lower()))
-        cache_key    = CACHE_ENV + "game" + path_key + sorted_pairs
+        cache_key   = f"{CACHE_ENV}:game:{path_key}:{sorted_pairs}"
         cached_vals = cache.get(cache_key)
 
         if cached_vals:
@@ -90,7 +90,7 @@ def search(request, game_ids):
             gamesSerial = gamesSerial.data
             cache_vals  = gamesSerial, paginator.get_next_link(), paginator.get_previous_link(), paginator.count
             if not game_ids:
-                cache.set(cache_key, cache_vals, timeout=2592000)
+                cache.set(cache_key, cache_vals, timeout=600)
 
     return cache_vals
 

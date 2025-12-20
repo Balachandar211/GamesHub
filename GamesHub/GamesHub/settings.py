@@ -54,6 +54,34 @@ INSTALLED_APPS = [
     "Support"
 ]
 
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "django_server": {
+            "format": "[{asctime}] {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "django_server",
+        },
+    },
+    "loggers": {
+        "django.server": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "gameshub": {
+            "handlers": ["console"],
+            "level": "DEBUG" if DEBUG else "INFO",
+            "propagate": False,
+        },
+    },
+}
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -75,10 +103,24 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
+
 SPECTACULAR_SETTINGS = {
     'TITLE': 'GameHub API',
-    'DESCRIPTION': 'Backend API for GamesHub store',
-    'VERSION': '1.0.0',
+    'DESCRIPTION': (
+        'Backend API for GamesHub store.\n\n'
+        'Architecture Overview:\n'
+        '- Built with Django and Django REST Framework as the primary backend.\n'
+        '- Flask-based microservice used for managing email jobs.\n'
+        '- PostgreSQL database provided by Aiven.\n'
+        '- Supabase S3 image buckets used for storage.\n'
+        '- Authentication handled via Simple JWT.\n'
+        '- Celery jobs used for running batch processes.\n'
+        '- Redis used for caching, as a counter, and as the Celery broker.\n'
+        '- Version control managed with Git.\n'
+        '- Instance image maintained with Docker and deployed as a Render web service.\n'
+        '- Documentation is generated with DRF Spectacular as per OpenAPI v3 specification.'
+    ),
+    'VERSION': '2.0.0',
     'COMPONENT_SPLIT_REQUEST': True,
     'SERVE_INCLUDE_SCHEMA': True,
     'SECURITY': [{'BearerAuth': []}],
@@ -91,7 +133,15 @@ SPECTACULAR_SETTINGS = {
             },
         },
     },
+    'SWAGGER_UI_SETTINGS': {
+        'defaultModelsExpandDepth': -1,
+        'showSchemas': False,
+    },
+    "OPERATION_ID_AUTO_GENERATE": True,
+    "OPERATION_ID_STRIP_COMMON_PREFIX": True,
 }
+
+
 
 AUTH_USER_MODEL = 'Login.AppUser'
 
@@ -179,7 +229,7 @@ SIMPLE_JWT = {
 }
 
 USER_RECOVERABLE_TIME = timedelta(days=30)
-BAN_USER_TIME         = timedelta(days=0)
+BAN_USER_TIME         = timedelta(days=30)
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'

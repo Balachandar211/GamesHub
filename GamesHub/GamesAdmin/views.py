@@ -13,24 +13,28 @@ from rest_framework.exceptions import APIException, UnsupportedMediaType
 from django.db.models import Q
 from django.core.exceptions import ValidationError
 from utills.game_media_update import populate_gamemedia
+import logging
+from .documentation import games_admin_delete_schema, games_admin_get_schema, games_admin_patch_schema, games_admin_post_schema, manage_game_delete_schema, manage_game_get_schema, manage_game_patch_schema, manage_games_media_delete_schema, manage_games_media_get_schema, manage_games_media_post_schema, game_media_admin_schema
+
+logger = logging.getLogger("gameshub") 
 User = get_user_model()
 
-
+@games_admin_post_schema
+@games_admin_patch_schema
+@games_admin_delete_schema
+@games_admin_get_schema
 @api_view(["GET", "POST", "PATCH", "DELETE"])
 @permission_classes([IsAdminOrReadOnly])
 @parser_classes([MultiPartParser, JSONParser])
 def games_admin(request):
     if request.method == "GET":
-        game_ids = request.data.get("games")
-        if game_ids and (not isinstance(game_ids, list)):
-            return Response({"error":{"code":"not null constraint", "message":"if field games if populated it should be a list"}}, status=status.HTTP_400_BAD_REQUEST)
+        game_ids = request.query_params.getlist("games")
         
         try:
             gamesSerial, get_next_link, get_previous_link, count = search(request, game_ids)
             return Response({"message": "game catalogue", "count":count,  "next": get_next_link, "previous": get_previous_link, "catalogue":gamesSerial}, status=status.HTTP_200_OK)
-        except UnsupportedMediaType as e:
-            return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         except Exception as e:
+            logger.error(f"game admin get endpoint failure: {str(e)}", exc_info=True)
             return Response({"error":{"code":"game_fetch_error", "message":"internal server error"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
       
     if request.method == "POST":
@@ -81,6 +85,7 @@ def games_admin(request):
             return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         
         except Exception as e:
+            logger.error(f"game admin post endpoint failure: {str(e)}", exc_info=True)
             return Response({"error": {"code":"add_game_failed", "message":"errors in adding game endpoint"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     if request.method == "PATCH":
@@ -148,6 +153,7 @@ def games_admin(request):
             return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         
         except Exception as e:
+            logger.error(f"game admin patch endpoint failure: {str(e)}", exc_info=True)
             return Response({"error": {"code":"update_game_failed", "message":"errors in updating game endpoint"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     if request.method == "DELETE":
@@ -180,10 +186,13 @@ def games_admin(request):
             return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         
         except Exception as e:
+            logger.error(f"game admin delete endpoint failure: {str(e)}", exc_info=True)
             return Response({"error": {"code":"delete_game_failed", "message":"errors in delete game endpoint at admin"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
-
+@manage_game_patch_schema
+@manage_game_get_schema
+@manage_game_delete_schema
 @api_view(["GET", "PATCH", "DELETE"])
 @permission_classes([IsAdminOrReadOnly])
 @parser_classes([MultiPartParser, JSONParser])
@@ -196,9 +205,8 @@ def manage_games(request, pk):
             return Response({"message":f"game detail for game with id {pk}", "game":gameObjSerial.data}, status=status.HTTP_200_OK)
         except Game.DoesNotExist:
             return Response({"error": {"code":"do_not_exist", "message":"game object doesn't exist"}}, status=status.HTTP_404_NOT_FOUND)  
-        except UnsupportedMediaType as e:
-            return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         except Exception as e:
+            logger.error(f"manage game get endpoint failure: {str(e)}", exc_info=True)
             return Response({"error": {"code":"manage_game_failed", "message":"errors in game manage get endpoint"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     if request.method == "PATCH":
@@ -217,21 +225,25 @@ def manage_games(request, pk):
         except UnsupportedMediaType as e:
             return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         except Exception as e:
+            logger.error(f"manage game patch endpoint failure: {str(e)}", exc_info=True)
             return Response({"error": {"code":"manage_game_failed", "message":"errors in game manage patch endpoint"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     if request.method == "DELETE":
         try:
             gameObj  = Game.objects.get(pk = pk)
             gameObj.delete()
-            return Response({"message":f"game id {pk} deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+            return Response({"message":f"game with id {pk} deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
         except Game.DoesNotExist:
             return Response({"error": {"code":"do_not_exist", "message":"game object doesn't exist"}}, status=status.HTTP_404_NOT_FOUND)  
         except UnsupportedMediaType as e:
             return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         except Exception as e:
+            logger.error(f"manage game delete endpoint failure: {str(e)}", exc_info=True)
             return Response({"error": {"code":"manage_game_failed", "message":"errors in game manage delete endpoint"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-
+@manage_games_media_post_schema
+@manage_games_media_get_schema
+@manage_games_media_delete_schema
 @api_view(["GET", "POST", "DELETE"])
 @permission_classes([IsAdminOrReadOnly])
 @parser_classes([MultiPartParser, JSONParser])
@@ -247,9 +259,8 @@ def manage_games_media(request, pk):
             return Response({"message":f"game media detail for game with id {pk}", "media":gameMediaSerialData}, status=status.HTTP_200_OK)
         except Game.DoesNotExist:
                 return Response({"error": {"code":"do_not_exist", "message":"game object doesn't exist"}}, status=status.HTTP_404_NOT_FOUND)
-        except UnsupportedMediaType as e:
-            return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         except Exception as e:
+            logger.error(f"manage game media get endpoint failure: {str(e)}", exc_info=True)
             return Response({"error":{"code":"manage_game_media_fail", "message":"errors in game media get endpoint"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 
@@ -292,6 +303,7 @@ def manage_games_media(request, pk):
             return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         
         except Exception as e:
+            logger.error(f"manage game media post endpoint failure: {str(e)}", exc_info=True)
             return Response({"error":{"code":"manage_game_media_fail", "message":"errors in game media post endpoint"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 
@@ -314,9 +326,10 @@ def manage_games_media(request, pk):
             return Response({"error": {"code": "unsupported_media_type", "message": str(e)}}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
         
         except Exception as e:
+            logger.error(f"manage game media delete endpoint failure: {str(e)}", exc_info=True)
             return Response({"error":{"code":"manage_game_media_fail", "message":"errors in game media delete endpoint"}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
+@game_media_admin_schema
 @api_view(["POST"])
 @permission_classes([IsAdminOrReadOnly])
 def game_media_admin(request):
@@ -342,6 +355,7 @@ def game_media_admin(request):
         except ValidationError as e:
             game_media_updated[id] = e
         except Exception as e:
+            logger.error(f"manage game media admin bulk endpoint failure: {str(e)}", exc_info=True)
             return Response({"error":{"code":"auto_upload_fail", "message":"errors in automatic game media population"}, "updated_games":game_media_updated}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     return Response({"message":"game media update details", "details":game_media_updated}, status=status.HTTP_200_OK)
