@@ -51,7 +51,8 @@ INSTALLED_APPS = [
     "drf_spectacular_sidecar",
     "GamesAdmin",
     "Community",
-    "Support"
+    "Support",
+    "corsheaders",
 ]
 
 LOGGING = {
@@ -163,6 +164,7 @@ CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -175,6 +177,8 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'utills.middleware.EndpointRedirectMiddleware'
 ]
+
+CORS_ALLOWED_ORIGINS = [ "http://localhost:5173", ]
 
 WHITENOISE_USE_FINDERS = True
 

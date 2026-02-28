@@ -192,6 +192,8 @@ def featuredPage(request):
         user_featured  = list(map(lambda kv : (kv[0], kv[1]), user_featured.items()))
         user_featured  = sorted(user_featured, key = lambda kv : kv[1], reverse=True)[:min(len(user_featured), 5)]
         user_featured  = list(map(lambda v : v[0], user_featured))    
+        library_games  = set(GameInteraction.objects.filter(user=request.user).values_list('game_id', flat=True))
+        user_featured  = list(set(user_featured) - library_games)
         gameObjs       = Game.objects.filter(id__in = user_featured)
         gameObjsSerial = gamesSerializerSimplified(gameObjs, many=True).data
     except redis.ConnectionError:

@@ -114,18 +114,51 @@ def populate_gamemedia(game):
     return logs
 
 
+# def get_cover_url(game_name):
+#     query = f'fields cover.url; where name = "{game_name}"; limit 1;'
+#     resp = requests.post(
+#         "https://api.igdb.com/v4/games",
+#         headers=IGDB_HEADERS,
+#         data=query
+#     )
+#     if resp.ok and resp.json():
+#         cover = resp.json()[0].get("cover", {})
+#         url = cover.get("url", "")
+#         if url:
+#             url = url.replace("t_thumb", "t_cover_big")
+#             return download_image(url, game_name, '')
+#     return None
+
 def get_cover_url(game_name):
-    query = f'fields cover.url; where name = "{game_name}"; limit 1;'
+    query = f'fields cover; where name = "{game_name}"; limit 1;'
     resp = requests.post(
         "https://api.igdb.com/v4/games",
         headers=IGDB_HEADERS,
         data=query
     )
-    if resp.ok and resp.json():
-        cover = resp.json()[0].get("cover", {})
-        url = cover.get("url", "")
-        if url:
-            url = url.replace("t_thumb", "t_cover_big")
-            return download_image(url, game_name, '')
-    return None
+    if not resp.ok or not resp.json():
+        return None
 
+    cover_id = resp.json()[0].get("cover")
+    if not cover_id:
+        return None
+    
+    cover_query = f'fields url; where id = {cover_id};'
+    cover_resp = requests.post(
+        "https://api.igdb.com/v4/covers",
+        headers=IGDB_HEADERS,
+        data=cover_query
+    )
+    if not cover_resp.ok or not cover_resp.json():
+        return None
+
+    url = cover_resp.json()[0].get("url")
+    if not url:
+        return None
+
+    if "t_thumb" in url:
+        url = url.replace("t_thumb", "t_1080p")
+    elif "t_cover_big" in url:
+        url = url.replace("t_cover_big", "t_1080p")
+
+    return download_image(url, game_name, '')
